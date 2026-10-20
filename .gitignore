@@ -1,0 +1,14 @@
+# Editors / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local exports and scratch
+ainvil-config*.json
+*-api.json
+*.zip

@@ -1,0 +1,70 @@
+# Ainvil
+
+Ainvil is a single-page web app for common image generation workflows with ComfyUI: txt2img, img2img, and inpainting, plus LoRAs, batches, and a mask painter. Everything is in one `index.html` file. There's nothing to install or build.
+
+## Quick start
+
+1. Start ComfyUI with CORS enabled, so the page can talk to it:
+
+   ```sh
+   python main.py --listen --enable-cors-header
+   ```
+
+   You can also pass a specific origin instead of `*`, e.g. `--enable-cors-header http://myhost:8080`.
+2. Open `index.html` in Firefox or Chrome/Chromium. Opening it from disk (`file://`) works, and so does any static web server.
+3. Go to **Configuration › Connection**, enter the ComfyUI URL (default `http://localhost:8188/`), then click **Save** and **Test Connection**. **Auto-Configure** detects optional server features such as CADS.
+4. Go back to **Generate**, write a prompt and press **Generate** (or Ctrl+Enter in the prompt box).
+
+## Generate tab
+
+- **Main**: choose the functional workflow and model, write the prompt and negative prompt, and set the batch count (1–128 separate queue entries).
+  - **Clear** resets the page.
+  - **Generate Workflow** downloads the ComfyUI API-format workflow for the first image instead of running it.
+- **Generation Parameters**: resolution presets (1024 / 1536 × Square / Landscape / Portrait, or Custom), seed (with a Random toggle), batch size, steps, CFG, sampler and scheduler.
+- **Input Image**: drop, choose or paste an image to switch to **img2img**.
+  - Click the mask box to paint a mask, which switches to **inpainting**.
+  - In the mask editor: `[` and `]` change the brush size, `x` toggles erase, Ctrl+Z undoes.
+  - Masks can also be uploaded or downloaded. They are white-on-black PNGs, where white means "regenerate".
+- **Input Parameters**: denoise is set as a *start step*.
+  - With 30 steps, step 12 is denoise 0.60. The value field, step field and slider stay in sync.
+  - Crop and Noise Mask apply to img2img and inpainting.
+- **Output Gallery**: shows the latest run.
+  - Click the large image for a full-screen view: arrow keys browse, Esc closes, and you can right-click to save.
+  - **Download All** downloads the whole run as a ZIP file.
+  - **Use Seed** copies the selected image's seed into the Seed field. **Use as Input** loads the image as the input image for img2img.
+- **LoRA**: add any number of LoRAs from the server, filtered to the workflow's model family, with a weight for each.
+- **Custom Parameters**: extra settings defined by the selected workflow. Anima has *Resize method* and *Filename prefix*.
+
+The page remembers your Generate settings (not images) between visits.
+
+## Configuration
+
+Configuration is stored in the browser's `localStorage` and can be moved between computers:
+
+- **Global Import & Export**: export everything as one JSON file, or import a file to replace the current configuration.
+- **Functional Workflows**: each one has a name and model/LoRA filters (regular expressions, case-insensitive). It also has three ComfyUI workflows (txt2img, img2img, inpainting) with *mappings* that say which node input receives each Generate-tab value. Workflows can be loaded from ComfyUI's JSON (UI or API format) or from a ComfyUI PNG. **Auto-detect mappings** makes a good first guess for standard graphs.
+- **Custom Workflows**: open-ended workflows for the (upcoming) Extras tab, each with its own parameters and mappings.
+
+Each workflow can be exported and imported on its own. All exported files carry `"version": 1`.
+
+### Mapping notes
+
+- **LoRA template**: the sample LoRA loader node in your workflow. It is removed when no LoRAs are selected, and otherwise cloned and chained once per LoRA.
+- **Batch repeat**: for workflows without an Empty Latent Image (img2img and inpainting), batch size works by inserting a `RepeatLatentBatch` node in front of the mapped latent input.
+- **Output image**: Save Image nodes become Preview Image nodes when *Server Preferences › Save Image* is off.
+- **Inpainting**: the mask is sent as the input image's alpha channel (via ComfyUI's `/upload/mask`), so the Load Image node's MASK output carries it.
+- **Filename prefixes**: `%date:yyyyMMdd%` and `%Node title.widget%` are expanded by Ainvil, the same way the ComfyUI frontend does it.
+
+## Troubleshooting
+
+- **"Could not reach ComfyUI"**: check the URL and that ComfyUI is running with `--enable-cors-header`.
+- **Images or uploads fail only in the browser**: this is almost always CORS. The page fetches images through the API, so they need CORS too.
+- **"Mapping … points at node #N"**: the workflow was replaced and the mapping is stale. Re-map it in Configuration.
+
+## Development
+
+The default Anima workflows live in `workflows/` and are embedded into `index.html`. After editing them, run:
+
+```sh
+python3 tools/embed-workflows.py
+```

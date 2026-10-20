@@ -1,0 +1,2573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ainvil</title>
+<style>
+:root {
+  --bg: #15171c; --bg2: #1d2027; --card: #22262e; --line: #343a45; --line2: #2b3039;
+  --fg: #e6e8ec; --muted: #9aa3b2; --accent: #e0803a; --accent2: #f09a55; --accent-fg: #1a1208;
+  --ok: #4cc38a; --err: #ff6b6b; --warn: #e7b84a; --input: #181b21; --sel: #3a4252;
+  --radius: 8px; --gap: 12px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #eef0f3; --bg2: #e4e7ec; --card: #ffffff; --line: #cfd4dc; --line2: #e1e4e9;
+    --fg: #1d2129; --muted: #5d6675; --accent: #c9631d; --accent2: #b45714; --accent-fg: #fff;
+    --ok: #1f8f5c; --err: #c62828; --warn: #a77a00; --input: #f7f8fa; --sel: #dfe5ef;
+    color-scheme: light;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+input[type=text], input[type=url], input[type=number], select, textarea {
+  background: var(--input); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; min-width: 0;
+}
+textarea { resize: vertical; font-family: inherit; }
+input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+button {
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; white-space: nowrap;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent2); }
+button.big { padding: 10px 28px; font-size: 16px; }
+button.small { padding: 2px 8px; font-size: 12px; }
+button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
+button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; }
+button.on { background: var(--sel); border-color: var(--accent); }
+label { display: block; color: var(--muted); font-size: 12px; }
+label > input, label > select, label > textarea { margin-top: 3px; color: var(--fg); font-size: 14px; }
+label.chk { display: inline-flex; align-items: center; gap: 6px; color: var(--fg); font-size: 14px; cursor: pointer; }
+label.chk input { margin: 0; }
+.hint { color: var(--muted); font-size: 12px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+h3 { font-size: 14px; margin: 14px 0 8px; }
+
+.topbar { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--bg2); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; flex-wrap: wrap; }
+.brand { font-weight: 700; font-size: 18px; letter-spacing: .02em; }
+.brand span { color: var(--accent); }
+.tabs { display: flex; gap: 4px; }
+.tab { background: none; border: 1px solid transparent; }
+.tab.active { background: var(--card); border-color: var(--line); color: var(--accent); font-weight: 600; }
+.conn { margin-left: auto; font-size: 12px; color: var(--muted); cursor: pointer; }
+.conn::before { content: "●"; margin-right: 6px; color: var(--muted); }
+.conn.ok::before { color: var(--ok); } .conn.bad::before { color: var(--err); }
+
+main { padding: var(--gap) 16px 40px; }
+.tabpanel { display: none; } .tabpanel.active { display: block; }
+.columns { display: flex; gap: var(--gap); align-items: flex-start; }
+.column { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--gap); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.row > .grow { flex: 1 1 200px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stack { margin-top: 10px; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.actions .inline { display: flex; align-items: center; gap: 6px; }
+.actions .inline input { width: 80px; margin: 0; }
+
+#prompt { min-height: 160px; }
+#negative { min-height: 70px; }
+.modeline { margin-top: 10px; font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--sel); color: var(--fg); font-weight: 600; font-size: 12px; }
+.badge.img2img { background: #2f5d8a; color: #fff; } .badge.inpainting { background: #7a3f8f; color: #fff; }
+.status { margin-top: 8px; font-size: 13px; min-height: 1.4em; white-space: pre-wrap; word-break: break-word; }
+.status.error { color: var(--err); } .status.ok { color: var(--ok); }
+.progress { height: 4px; background: var(--line2); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+.progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: none; border-radius: 0; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: none; }
+.seg button.on { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.res { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.seedrow { display: flex; gap: 6px; align-items: center; margin-top: 3px; }
+.seedrow input[type=number] { flex: 1; min-width: 0; }
+.seedrow label.chk { font-size: 13px; }
+
+.gallery-main { aspect-ratio: 1; background: var(--input); border: 1px solid var(--line2); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.gallery-main img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+.placeholder, .ph { color: var(--muted); font-size: 13px; text-align: center; padding: 12px; pointer-events: none; }
+.gallery-info { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 1.4em; word-break: break-all; }
+.thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; max-height: calc(3 * (var(--thumb, 90px) + 6px)); overflow-y: auto; }
+.thumbs:empty { display: none; }
+.thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; border: 2px solid transparent; cursor: pointer; background: var(--input); display: block; }
+.thumbs img.sel { border-color: var(--accent); }
+
+.imgpair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.imgcol .actions { margin-top: 6px; gap: 4px; }
+.imgcol .actions button { padding: 4px 8px; font-size: 12px; }
+.imgcol .caption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.dropbox { aspect-ratio: 1; border: 2px dashed var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--input); position: relative; }
+.dropbox.drag { border-color: var(--accent); background: var(--sel); }
+.dropbox img, .dropbox canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.dropbox.clickable { cursor: crosshair; }
+.dropbox.wide { aspect-ratio: auto; min-height: 90px; flex-direction: column; gap: 6px; padding: 12px; text-align: center; }
+input[type=range] { width: 100%; margin-top: 10px; accent-color: var(--accent); }
+.checks { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+
+.lora-list { display: flex; flex-direction: column; gap: 6px; min-height: calc(8 * 36px); }
+.lora-row { display: grid; grid-template-columns: 1fr 80px auto; gap: 6px; align-items: center; }
+.lora-empty { color: var(--muted); font-size: 13px; }
+.custom-params { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.overlay[hidden] { display: none; }
+.overlay .close { position: absolute; top: 10px; right: 14px; font-size: 26px; line-height: 1; padding: 4px 12px; background: rgba(30,30,30,.8); color: #fff; z-index: 2; }
+#viewer img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
+#viewer .nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; background: rgba(30,30,30,.6); color: #fff; padding: 10px 14px; }
+#viewer .prev { left: 10px; } #viewer .next { right: 10px; }
+#maskEditor { flex-direction: column; align-items: stretch; justify-content: flex-start; }
+.mask-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: var(--bg2); border-bottom: 1px solid var(--line); color: var(--fg); }
+.mask-toolbar label { display: flex; align-items: center; gap: 6px; color: var(--fg); font-size: 13px; }
+.mask-toolbar input[type=range] { width: 140px; margin: 0; }
+.mask-toolbar .spacer { flex: 1; }
+.mask-stage { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
+.mask-wrap { position: relative; }
+.mask-wrap img, .mask-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mask-wrap canvas { opacity: .55; touch-action: none; cursor: none; }
+.brush-ring { position: fixed; border: 1px solid #fff; box-shadow: 0 0 0 1px #000; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); z-index: 101; }
+
+.config-wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
+.result { margin-top: 10px; font-size: 13px; white-space: pre-wrap; }
+.result.ok { color: var(--ok); } .result.error { color: var(--err); }
+.errorbox { background: rgba(255,80,80,.08); border: 1px solid var(--err); color: var(--err); border-radius: 6px; padding: 10px; white-space: pre-wrap; word-break: break-word; font-size: 12px; margin: 10px 0 0; max-height: 300px; overflow: auto; }
+details.collapsible > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.collapsible > summary::-webkit-details-marker { display: none; }
+details.collapsible > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+details.collapsible[open] > summary::before { transform: rotate(90deg); }
+details.collapsible > summary h2 { margin: 0; }
+.item { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-top: 10px; background: var(--bg2); }
+.item > summary { font-weight: 600; }
+.item .item { background: var(--card); }
+.sub { color: var(--muted); font-weight: normal; font-size: 12px; margin-left: 6px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+table.map { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+table.map td { border-top: 1px solid var(--line2); padding: 6px 4px; vertical-align: top; }
+table.map td:first-child { width: 28%; color: var(--fg); }
+table.map td:first-child .hint { display: block; }
+.targets { display: flex; flex-direction: column; gap: 4px; }
+.target { display: grid; grid-template-columns: 1.4fr 1fr auto; gap: 4px; }
+.target.nodeonly { grid-template-columns: 1fr auto; }
+.target select { padding: 3px 6px; font-size: 13px; }
+.targets > button { align-self: flex-start; }
+.param-card { border: 1px solid var(--line2); border-radius: 6px; padding: 10px; margin-top: 8px; }
+.toasts { position: fixed; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 200; max-width: min(420px, calc(100vw - 32px)); }
+.toast { background: var(--bg2); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 10px 12px; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.3); font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.toast.error { border-left-color: var(--err); } .toast.ok { border-left-color: var(--ok); }
+
+@media (max-width: 600px) {
+  main { padding: 10px 8px 40px; }
+  .topbar { padding: 8px; gap: 8px; }
+  .conn { margin-left: 0; width: 100%; }
+  .grid2, .custom-params { grid-template-columns: 1fr; }
+  .target { grid-template-columns: 1fr auto; }
+  .target select:nth-child(2) { grid-column: 1; }
+  table.map td { display: block; width: 100% !important; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Ain<span>vil</span></div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="generate" role="tab">Generate</button>
+    <button class="tab" data-tab="extras" role="tab">Extras</button>
+    <button class="tab" data-tab="config" role="tab">Configuration</button>
+  </nav>
+  <div id="connStatus" class="conn" title="Open Configuration">Not connected</div>
+</header>
+
+<main>
+<!-- ============================== GENERATE ============================== -->
+<section id="tab-generate" class="tabpanel active">
+  <div id="genColumns" class="columns"></div>
+  <div id="sectionPool" hidden>
+
+    <section class="card" id="sec-main">
+      <h2>Main</h2>
+      <div class="grid2">
+        <label>Functional Workflow <select id="fwSelect"></select></label>
+        <label>Model <select id="modelSelect"></select></label>
+      </div>
+      <label class="stack">Prompt <textarea id="prompt" rows="8" spellcheck="false"></textarea></label>
+      <label class="stack">Negative Prompt <textarea id="negative" rows="3" spellcheck="false"></textarea></label>
+      <div class="actions">
+        <button id="btnGenerate" class="primary big">Generate</button>
+        <label class="inline">Batch count <input id="batchCount" type="number" min="1" max="128" step="1"></label>
+        <button id="btnCancel" class="danger" hidden>Cancel</button>
+        <button id="btnClear">Clear</button>
+        <button id="btnWorkflow" title="Download the ComfyUI API workflow instead of running it">Generate Workflow</button>
+      </div>
+      <div class="modeline">Mode <span id="modeBadge" class="badge">txt2img</span><span id="queueInfo"></span></div>
+      <div class="progress"><div id="progressBar"></div></div>
+      <div id="genStatus" class="status"></div>
+    </section>
+
+    <section class="card" id="sec-params">
+      <h2>Generation Parameters</h2>
+      <div class="res">
+        <div class="seg" id="resProfiles">
+          <button data-profile="1024">1024</button><button data-profile="1536">1536</button><button data-custom="1">Custom</button>
+        </div>
+        <div class="seg" id="resRatios">
+          <button data-ratio="square">Square</button><button data-ratio="landscape">Landscape</button><button data-ratio="portrait">Portrait</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <label>Width <input id="width" type="number" min="16" max="16384" step="8"></label>
+        <label>Height <input id="height" type="number" min="16" max="16384" step="8"></label>
+        <div>
+          <label for="seed">Seed</label>
+          <div class="seedrow">
+            <input id="seed" type="number" min="0" step="1">
+            <label class="chk" title="Pick a new random seed for every generation"><input type="checkbox" id="randomSeed"> Random</label>
+          </div>
+        </div>
+        <label>Batch size <input id="batchSize" type="number" min="1" max="64" step="1"></label>
+        <label>Steps <input id="steps" type="number" min="1" max="10000" step="1"></label>
+        <label>CFG <input id="cfg" type="number" min="0" max="100" step="0.1"></label>
+        <label>Sampler <select id="sampler"></select></label>
+        <label>Scheduler <select id="scheduler"></select></label>
+      </div>
+    </section>
+
+    <section class="card" id="sec-custom">
+      <h2>Custom Parameters</h2>
+      <div id="customParams" class="custom-params"></div>
+    </section>
+
+    <section class="card" id="sec-gallery">
+      <h2>Output Gallery</h2>
+      <div class="gallery-main" id="galleryMain"><div class="placeholder">No images yet</div></div>
+      <div class="gallery-info" id="galleryInfo"></div>
+      <div class="thumbs" id="galleryThumbs"></div>
+      <div class="actions">
+        <button id="btnDlSel">Download Selected</button>
+        <button id="btnDlAll">Download All</button>
+        <button id="btnUseSeed" title="Copy this image's seed into the Seed field">Use Seed</button>
+        <button id="btnToInput" title="Load this image as the input image">Use as Input</button>
+      </div>
+    </section>
+
+    <section class="card" id="sec-input">
+      <h2>Input Image</h2>
+      <div class="imgpair">
+        <div class="imgcol">
+          <div class="caption">Image</div>
+          <div class="dropbox" id="inputBox"><span class="ph">Drop an image here</span></div>
+          <div class="actions">
+            <button id="btnPickImage">Choose…</button>
+            <button id="btnClearImage">Clear</button>
+          </div>
+        </div>
+        <div class="imgcol">
+          <div class="caption">Mask <span class="hint">(click to paint)</span></div>
+          <div class="dropbox" id="maskBox"><span class="ph">Load an image, then click here to paint a mask or drop a mask image</span></div>
+          <div class="actions">
+            <button id="btnDlMask">Download</button>
+            <button id="btnUpMask">Upload</button>
+            <button id="btnClearMask">Clear</button>
+          </div>
+        </div>
+      </div>
+      <input type="file" id="fileImage" accept="image/*" hidden>
+      <input type="file" id="fileMask" accept="image/*" hidden>
+    </section>
+
+    <section class="card" id="sec-inparams">
+      <h2>Input Parameters</h2>
+      <div class="grid2">
+        <label>Denoise <input id="denoiseValue" type="number" min="0" max="1" step="0.01"></label>
+        <label>Denoise step (start step) <input id="denoiseStep" type="number" min="0" step="1"></label>
+      </div>
+      <input type="range" id="denoiseSlider" min="0" max="30" step="1" aria-label="Denoise step">
+      <div class="checks">
+        <label class="chk"><input type="checkbox" id="crop"> Crop</label>
+        <label class="chk"><input type="checkbox" id="noiseMask"> Noise Mask</label>
+      </div>
+      <p class="hint" id="inparamsHint"></p>
+    </section>
+
+    <section class="card" id="sec-cads">
+      <h2>CADS</h2>
+      <p class="hint">Reserved — not yet implemented. <span id="cadsStatus"></span></p>
+    </section>
+
+    <section class="card" id="sec-lora">
+      <h2>LoRA</h2>
+      <div id="loraList" class="lora-list"></div>
+      <div class="actions"><button id="btnAddLora">+ Add LoRA</button></div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================== EXTRAS ============================== -->
+<section id="tab-extras" class="tabpanel">
+  <div class="config-wrap">
+    <section class="card">
+      <h2>Extras</h2>
+      <p>This tab will run open-ended custom workflows (upscaling in particular). It is empty pending further design.</p>
+      <p class="hint">Custom workflows can already be configured, imported and exported in the Configuration tab.</p>
+    </section>
+  </div>
+</section>
+
+<!-- ============================== CONFIGURATION ============================== -->
+<section id="tab-config" class="tabpanel">
+  <div class="config-wrap">
+    <section class="card">
+      <h2>Connection</h2>
+      <div class="row">
+        <label class="grow">ComfyUI API URL <input id="apiUrl" type="url" placeholder="http://localhost:8188/" spellcheck="false"></label>
+      </div>
+      <div class="actions">
+        <button id="btnSaveUrl" class="primary">Save</button>
+        <button id="btnTestConn">Test Connection</button>
+        <button id="btnAutoConf" title="Interrogate the server and fill out Server Features">Auto-Configure</button>
+        <button id="btnUseOrigin" title="Use the address this page was loaded from (e.g. when hosted next to ComfyUI)">Use page origin</button>
+      </div>
+      <div id="connResult" class="result"></div>
+    </section>
+
+    <section class="card">
+      <h2>Global Import &amp; Export</h2>
+      <div class="actions" style="margin-top:0">
+        <button id="btnExportAll">Export configuration</button>
+        <button id="btnResetConfig" class="danger">Reset to defaults</button>
+      </div>
+      <div class="dropbox wide" id="importBox" style="margin-top:10px">
+        <span>Drop a configuration JSON file here, or <button id="btnPickImport" class="link">choose a file</button></span>
+        <span id="importFileName" class="hint"></span>
+      </div>
+      <input type="file" id="fileImport" accept=".json,application/json" hidden>
+      <div class="actions">
+        <button id="btnImport" disabled>Import (overwrites current configuration)</button>
+      </div>
+      <pre id="importError" class="errorbox" hidden></pre>
+    </section>
+
+    <section class="card">
+      <h2>Server Features</h2>
+      <label class="chk"><input type="checkbox" id="cfgCads"> CADS</label>
+      <span class="hint"> — requires the comfyui-cads extension on the server.</span>
+    </section>
+
+    <section class="card">
+      <h2>Server Preferences</h2>
+      <label class="chk"><input type="checkbox" id="cfgSaveImage"> Save Image</label>
+      <span class="hint"> — save outputs on the server. When off, images are returned through the API as unsaved previews.</span>
+    </section>
+
+    <details class="card collapsible" id="fwSection" open>
+      <summary><h2>Functional Workflows (Generate)</h2></summary>
+      <div class="actions">
+        <button id="btnImportFw">Import functional workflow…</button>
+        <button id="btnAddFw">+ New functional workflow</button>
+      </div>
+      <pre id="fwImportError" class="errorbox" hidden></pre>
+      <div id="fwList"></div>
+    </details>
+
+    <details class="card collapsible" id="cwSection">
+      <summary><h2>Custom Workflows (Extras)</h2></summary>
+      <div class="actions">
+        <button id="btnImportCw">Import custom workflow…</button>
+        <button id="btnAddCw">+ New custom workflow</button>
+      </div>
+      <pre id="cwImportError" class="errorbox" hidden></pre>
+      <div id="cwList"></div>
+    </details>
+  </div>
+</section>
+</main>
+
+<!-- Full screen image viewer -->
+<div id="viewer" class="overlay" hidden>
+  <button class="close" id="viewerClose" title="Close (Esc)">×</button>
+  <button class="nav prev" id="viewerPrev" title="Previous">‹</button>
+  <img id="viewerImg" alt="Generated image">
+  <button class="nav next" id="viewerNext" title="Next">›</button>
+</div>
+
+<!-- Mask editor -->
+<div id="maskEditor" class="overlay" hidden>
+  <div class="mask-toolbar">
+    <div class="seg"><button id="mePaint" class="on">Paint</button><button id="meErase">Erase</button></div>
+    <label>Brush <input type="range" id="meSize" min="2" max="300" value="40"></label>
+    <button id="meUndo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="meInvert">Invert</button>
+    <button id="meFill">Fill</button>
+    <button id="meClear">Clear</button>
+    <span class="spacer"></span>
+    <button id="meCancel">Cancel</button>
+    <button id="meDone" class="primary">Done</button>
+  </div>
+  <div class="mask-stage" id="meStage"><div class="mask-wrap" id="meWrap"><img id="meImg" alt=""></div></div>
+  <div class="brush-ring" id="meRing" hidden></div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- Default ComfyUI workflows (UI format) for the built-in Anima functional workflow.
+     Regenerate with: python3 tools/embed-workflows.py -->
+<script type="application/json" id="default-workflows">{"txt2img":{"id":"be9448fc-ae4f-4a13-8eda-0b56fd566400","revision":0,"last_node_id":62,"last_link_id":187,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[{"localized_name":"clip_name","name":"clip_name","type":"COMBO","widget":{"name":"clip_name"},"link":null},{"localized_name":"type","name":"type","type":"COMBO","widget":{"name":"type"},"link":null},{"localized_name":"device","name":"device","shape":7,"type":"COMBO","widget":{"name":"device"},"link":null}],"outputs":[{"localized_name":"CLIP","name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen_3_06b_base.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/qwen_3_06b_base.safetensors","stable_diffusion","default"],"widgets_values_named":{"clip_name":"models/anima/qwen_3_06b_base.safetensors","type":"stable_diffusion","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":8,"mode":0,"inputs":[{"localized_name":"samples","name":"samples","type":"LATENT","link":10},{"localized_name":"vae","name":"vae","type":"VAE","link":11}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":1,"mode":0,"inputs":[{"localized_name":"vae_name","name":"vae_name","type":"COMBO","widget":{"name":"vae_name"},"link":null}],"outputs":[{"localized_name":"VAE","name":"VAE","type":"VAE","links":[11]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"qwen_image_vae.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/qwen/qwen_image_vae.safetensors"],"widgets_values_named":{"vae_name":"models/qwen/qwen_image_vae.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":2,"mode":0,"inputs":[{"localized_name":"unet_name","name":"unet_name","type":"COMBO","widget":{"name":"unet_name"},"link":null},{"localized_name":"weight_dtype","name":"weight_dtype","type":"COMBO","widget":{"name":"weight_dtype"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"anima-preview.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/anima_baseV10.safetensors","default"],"widgets_values_named":{"unet_name":"models/anima/anima_baseV10.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":81},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[187]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":80},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[186]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":6,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":83},{"localized_name":"lora_name","name":"lora_name","type":"COMBO","widget":{"name":"lora_name"},"link":null},{"localized_name":"strength_model","name":"strength_model","type":"FLOAT","widget":{"name":"strength_model"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[185]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["models/anima/oatd-AB10-01.safetensors",1],"widgets_values_named":{"lora_name":"models/anima/oatd-AB10-01.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":7,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":185},{"localized_name":"positive","name":"positive","type":"CONDITIONING","link":186},{"localized_name":"negative","name":"negative","type":"CONDITIONING","link":187},{"localized_name":"latent_image","name":"latent_image","type":"LATENT","link":176},{"localized_name":"seed","name":"seed","type":"INT","widget":{"name":"seed"},"link":null},{"localized_name":"steps","name":"steps","type":"INT","widget":{"name":"steps"},"link":null},{"localized_name":"cfg","name":"cfg","type":"FLOAT","widget":{"name":"cfg"},"link":null},{"localized_name":"sampler_name","name":"sampler_name","type":"COMBO","widget":{"name":"sampler_name"},"link":null},{"localized_name":"scheduler","name":"scheduler","type":"COMBO","widget":{"name":"scheduler"},"link":null},{"localized_name":"denoise","name":"denoise","type":"FLOAT","widget":{"name":"denoise"},"link":null}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",30,4,"euler_ancestral","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":30,"cfg":4,"sampler_name":"euler_ancestral","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":9,"mode":0,"inputs":[{"localized_name":"images","name":"images","type":"IMAGE","link":82},{"localized_name":"filename_prefix","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null}],"outputs":[{"localized_name":"images","name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"}},{"id":28,"type":"EmptyLatentImage","pos":[711.2040958030439,323.49853495656214],"size":[307.59114583333337,106],"flags":{},"order":3,"mode":0,"inputs":[{"localized_name":"width","name":"width","type":"INT","widget":{"name":"width"},"link":null},{"localized_name":"height","name":"height","type":"INT","widget":{"name":"height"},"link":null},{"localized_name":"batch_size","name":"batch_size","type":"INT","widget":{"name":"batch_size"},"link":null}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","links":[176]}],"properties":{"Node name for S&R":"EmptyLatentImage","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1024,1024,1],"widgets_values_named":{"width":1024,"height":1024,"batch_size":1}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[176,28,0,19,3,"LATENT"],[185,49,0,19,0,"MODEL"],[186,11,0,19,1,"CONDITIONING"],[187,12,0,19,2,"CONDITIONING"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.7947449170740577,"offset":[359.6539484140199,290.0328048541712]},"frontendVersion":"1.51.9","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4},"img2img":{"id":"6021eab4-33b8-4699-9538-e6909073f38a","revision":0,"last_node_id":62,"last_link_id":188,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[{"localized_name":"clip_name","name":"clip_name","type":"COMBO","widget":{"name":"clip_name"},"link":null},{"localized_name":"type","name":"type","type":"COMBO","widget":{"name":"type"},"link":null},{"localized_name":"device","name":"device","shape":7,"type":"COMBO","widget":{"name":"device"},"link":null}],"outputs":[{"localized_name":"CLIP","name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen_3_06b_base.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/qwen_3_06b_base.safetensors","stable_diffusion","default"],"widgets_values_named":{"clip_name":"models/anima/qwen_3_06b_base.safetensors","type":"stable_diffusion","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":10,"mode":0,"inputs":[{"localized_name":"samples","name":"samples","type":"LATENT","link":10},{"localized_name":"vae","name":"vae","type":"VAE","link":11}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":53,"type":"ImageScale","pos":[743.4037482562973,565.2220989113353],"size":[270,130],"flags":{},"order":6,"mode":0,"inputs":[{"localized_name":"image","name":"image","type":"IMAGE","link":163},{"localized_name":"upscale_method","name":"upscale_method","type":"COMBO","widget":{"name":"upscale_method"},"link":null},{"localized_name":"width","name":"width","type":"INT","widget":{"name":"width"},"link":null},{"localized_name":"height","name":"height","type":"INT","widget":{"name":"height"},"link":null},{"localized_name":"crop","name":"crop","type":"COMBO","widget":{"name":"crop"},"link":null}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","links":[174]}],"properties":{"Node name for S&R":"ImageScale","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":["lanczos",1024,1024,"disabled"],"widgets_values_named":{"upscale_method":"lanczos","width":1024,"height":1024,"crop":"disabled"}},{"id":51,"type":"LoadImage","pos":[724.5253536266969,749.4620387119438],"size":[282.7333297729492,314.0000000000001],"flags":{},"order":1,"mode":0,"inputs":[{"localized_name":"image","name":"image","type":"COMBO","widget":{"name":"image"},"link":null},{"localized_name":"choose file to upload","name":"upload","type":"IMAGEUPLOAD","widget":{"name":"upload"},"link":null}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","links":[163]},{"localized_name":"MASK","name":"MASK","type":"MASK","links":[]}],"properties":{"Node name for S&R":"LoadImage","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["example.png","image"],"widgets_values_named":{"image":"example.png","upload":"image"}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":2,"mode":0,"inputs":[{"localized_name":"vae_name","name":"vae_name","type":"COMBO","widget":{"name":"vae_name"},"link":null}],"outputs":[{"localized_name":"VAE","name":"VAE","type":"VAE","links":[11,89]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"qwen_image_vae.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/qwen/qwen_image_vae.safetensors"],"widgets_values_named":{"vae_name":"models/qwen/qwen_image_vae.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":3,"mode":0,"inputs":[{"localized_name":"unet_name","name":"unet_name","type":"COMBO","widget":{"name":"unet_name"},"link":null},{"localized_name":"weight_dtype","name":"weight_dtype","type":"COMBO","widget":{"name":"weight_dtype"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"anima-preview.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/anima_baseV10.safetensors","default"],"widgets_values_named":{"unet_name":"models/anima/anima_baseV10.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":81},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[188]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":80},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[187]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":7,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":83},{"localized_name":"lora_name","name":"lora_name","type":"COMBO","widget":{"name":"lora_name"},"link":null},{"localized_name":"strength_model","name":"strength_model","type":"FLOAT","widget":{"name":"strength_model"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[185]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["models/anima/oatd-AB10-01.safetensors",1],"widgets_values_named":{"lora_name":"models/anima/oatd-AB10-01.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":9,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":185},{"localized_name":"positive","name":"positive","type":"CONDITIONING","link":187},{"localized_name":"negative","name":"negative","type":"CONDITIONING","link":188},{"localized_name":"latent_image","name":"latent_image","type":"LATENT","link":186},{"localized_name":"seed","name":"seed","type":"INT","widget":{"name":"seed"},"link":null},{"localized_name":"steps","name":"steps","type":"INT","widget":{"name":"steps"},"link":null},{"localized_name":"cfg","name":"cfg","type":"FLOAT","widget":{"name":"cfg"},"link":null},{"localized_name":"sampler_name","name":"sampler_name","type":"COMBO","widget":{"name":"sampler_name"},"link":null},{"localized_name":"scheduler","name":"scheduler","type":"COMBO","widget":{"name":"scheduler"},"link":null},{"localized_name":"denoise","name":"denoise","type":"FLOAT","widget":{"name":"denoise"},"link":null}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",30,4,"euler_ancestral","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":30,"cfg":4,"sampler_name":"euler_ancestral","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":11,"mode":0,"inputs":[{"localized_name":"images","name":"images","type":"IMAGE","link":82},{"localized_name":"filename_prefix","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null}],"outputs":[{"localized_name":"images","name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"}},{"id":52,"type":"VAEEncode","pos":[882.1358965920655,473.63455299354797],"size":[140,46],"flags":{},"order":8,"mode":0,"inputs":[{"localized_name":"pixels","name":"pixels","type":"IMAGE","link":174},{"localized_name":"vae","name":"vae","type":"VAE","link":89}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","links":[186]}],"properties":{"Node name for S&R":"VAEEncode","cnr_id":"comfy-core","ver":"0.13.0"}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[89,15,0,52,1,"VAE"],[163,51,0,53,0,"IMAGE"],[174,53,0,52,0,"IMAGE"],[185,49,0,19,0,"MODEL"],[186,52,0,19,3,"LATENT"],[187,11,0,19,1,"CONDITIONING"],[188,12,0,19,2,"CONDITIONING"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.7947449170740577,"offset":[95.41822260008394,315.82724475505546]},"frontendVersion":"1.51.9","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4},"inpainting":{"id":"ab424945-0e19-4441-907e-1bcaa85e2d1f","revision":0,"last_node_id":62,"last_link_id":186,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[{"localized_name":"clip_name","name":"clip_name","type":"COMBO","widget":{"name":"clip_name"},"link":null},{"localized_name":"type","name":"type","type":"COMBO","widget":{"name":"type"},"link":null},{"localized_name":"device","name":"device","shape":7,"type":"COMBO","widget":{"name":"device"},"link":null}],"outputs":[{"localized_name":"CLIP","name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen_3_06b_base.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/qwen_3_06b_base.safetensors","stable_diffusion","default"],"widgets_values_named":{"clip_name":"models/anima/qwen_3_06b_base.safetensors","type":"stable_diffusion","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":10,"mode":0,"inputs":[{"localized_name":"samples","name":"samples","type":"LATENT","link":10},{"localized_name":"vae","name":"vae","type":"VAE","link":11}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":53,"type":"ImageScale","pos":[743.4037482562973,565.2220989113353],"size":[270,130],"flags":{},"order":6,"mode":0,"inputs":[{"localized_name":"image","name":"image","type":"IMAGE","link":163},{"localized_name":"upscale_method","name":"upscale_method","type":"COMBO","widget":{"name":"upscale_method"},"link":null},{"localized_name":"width","name":"width","type":"INT","widget":{"name":"width"},"link":null},{"localized_name":"height","name":"height","type":"INT","widget":{"name":"height"},"link":null},{"localized_name":"crop","name":"crop","type":"COMBO","widget":{"name":"crop"},"link":null}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","links":[164]}],"properties":{"Node name for S&R":"ImageScale","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":["lanczos",1024,1024,"disabled"],"widgets_values_named":{"upscale_method":"lanczos","width":1024,"height":1024,"crop":"disabled"}},{"id":51,"type":"LoadImage","pos":[724.5253536266969,749.4620387119438],"size":[282.7333297729492,314.0000000000001],"flags":{},"order":1,"mode":0,"inputs":[{"localized_name":"image","name":"image","type":"COMBO","widget":{"name":"image"},"link":null},{"localized_name":"choose file to upload","name":"upload","type":"IMAGEUPLOAD","widget":{"name":"upload"},"link":null}],"outputs":[{"localized_name":"IMAGE","name":"IMAGE","type":"IMAGE","links":[163]},{"localized_name":"MASK","name":"MASK","type":"MASK","links":[161]}],"properties":{"Node name for S&R":"LoadImage","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["example.png","image"],"widgets_values_named":{"image":"example.png","upload":"image"}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":2,"mode":0,"inputs":[{"localized_name":"vae_name","name":"vae_name","type":"COMBO","widget":{"name":"vae_name"},"link":null}],"outputs":[{"localized_name":"VAE","name":"VAE","type":"VAE","links":[11,165]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"qwen_image_vae.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/qwen/qwen_image_vae.safetensors"],"widgets_values_named":{"vae_name":"models/qwen/qwen_image_vae.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":3,"mode":0,"inputs":[{"localized_name":"unet_name","name":"unet_name","type":"COMBO","widget":{"name":"unet_name"},"link":null},{"localized_name":"weight_dtype","name":"weight_dtype","type":"COMBO","widget":{"name":"weight_dtype"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"anima-preview.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/anima_baseV10.safetensors","default"],"widgets_values_named":{"unet_name":"models/anima/anima_baseV10.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":81},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[158]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"localized_name":"clip","name":"clip","type":"CLIP","link":80},{"localized_name":"text","name":"text","type":"STRING","widget":{"name":"text"},"link":null}],"outputs":[{"localized_name":"CONDITIONING","name":"CONDITIONING","type":"CONDITIONING","links":[171]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":7,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":83},{"localized_name":"lora_name","name":"lora_name","type":"COMBO","widget":{"name":"lora_name"},"link":null},{"localized_name":"strength_model","name":"strength_model","type":"FLOAT","widget":{"name":"strength_model"},"link":null}],"outputs":[{"localized_name":"MODEL","name":"MODEL","type":"MODEL","links":[185]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["models/anima/oatd-AB10-01.safetensors",1],"widgets_values_named":{"lora_name":"models/anima/oatd-AB10-01.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":9,"mode":0,"inputs":[{"localized_name":"model","name":"model","type":"MODEL","link":185},{"localized_name":"positive","name":"positive","type":"CONDITIONING","link":172},{"localized_name":"negative","name":"negative","type":"CONDITIONING","link":173},{"localized_name":"latent_image","name":"latent_image","type":"LATENT","link":186},{"localized_name":"seed","name":"seed","type":"INT","widget":{"name":"seed"},"link":null},{"localized_name":"steps","name":"steps","type":"INT","widget":{"name":"steps"},"link":null},{"localized_name":"cfg","name":"cfg","type":"FLOAT","widget":{"name":"cfg"},"link":null},{"localized_name":"sampler_name","name":"sampler_name","type":"COMBO","widget":{"name":"sampler_name"},"link":null},{"localized_name":"scheduler","name":"scheduler","type":"COMBO","widget":{"name":"scheduler"},"link":null},{"localized_name":"denoise","name":"denoise","type":"FLOAT","widget":{"name":"denoise"},"link":null}],"outputs":[{"localized_name":"LATENT","name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",30,4,"euler_ancestral","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":30,"cfg":4,"sampler_name":"euler_ancestral","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":11,"mode":0,"inputs":[{"localized_name":"images","name":"images","type":"IMAGE","link":82},{"localized_name":"filename_prefix","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null}],"outputs":[{"localized_name":"images","name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"}},{"id":60,"type":"InpaintModelConditioning","pos":[743.558142409847,134.55623550833846],"size":[270,138],"flags":{},"order":8,"mode":0,"inputs":[{"localized_name":"positive","name":"positive","type":"CONDITIONING","link":171},{"localized_name":"negative","name":"negative","type":"CONDITIONING","link":158},{"localized_name":"vae","name":"vae","type":"VAE","link":165},{"localized_name":"pixels","name":"pixels","type":"IMAGE","link":164},{"localized_name":"mask","name":"mask","type":"MASK","link":161},{"localized_name":"noise_mask","name":"noise_mask","type":"BOOLEAN","widget":{"name":"noise_mask"},"link":null}],"outputs":[{"localized_name":"positive","name":"positive","type":"CONDITIONING","links":[172]},{"localized_name":"negative","name":"negative","type":"CONDITIONING","links":[173]},{"localized_name":"latent","name":"latent","type":"LATENT","links":[186]}],"properties":{"Node name for S&R":"InpaintModelConditioning","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":[true],"widgets_values_named":{"noise_mask":true}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[158,12,0,60,1,"CONDITIONING"],[161,51,1,60,4,"MASK"],[163,51,0,53,0,"IMAGE"],[164,53,0,60,3,"IMAGE"],[165,15,0,60,2,"VAE"],[171,11,0,60,0,"CONDITIONING"],[172,60,0,19,1,"CONDITIONING"],[173,60,1,19,2,"CONDITIONING"],[185,49,0,19,0,"MODEL"],[186,60,2,19,3,"LATENT"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.7947449170740577,"offset":[133.16618343064562,261.7218342312495]},"frontendVersion":"1.51.9","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4}}</script>
+
+<script>
+'use strict';
+
+/* ======================================================================
+   Constants
+   ====================================================================== */
+const CONFIG_VERSION = 1;
+const LS_CONFIG = 'ainvil.config';
+const LS_GEN = 'ainvil.generate';
+const DEFAULT_API = 'http://localhost:8188/';
+const MODES = ['txt2img', 'img2img', 'inpainting'];
+const UPLOAD_SUBFOLDER = 'ainvil';
+
+// Functional parameters: things on the Generate tab that a functional workflow maps onto its ComfyUI workflows.
+const FPARAMS = [
+  { key: 'model', label: 'Model', hint: 'Model loader input; the model list is read from the server' },
+  { key: 'prompt', label: 'Prompt' },
+  { key: 'negative', label: 'Negative prompt' },
+  { key: 'width', label: 'Width' },
+  { key: 'height', label: 'Height' },
+  { key: 'batch_size', label: 'Batch size' },
+  { key: 'batch_repeat', label: 'Batch repeat', hint: 'Latent input that gets a RepeatLatentBatch node inserted when batch size > 1 (for workflows without an empty latent)' },
+  { key: 'seed', label: 'Seed' },
+  { key: 'steps', label: 'Steps' },
+  { key: 'cfg', label: 'CFG' },
+  { key: 'sampler_name', label: 'Sampler' },
+  { key: 'scheduler', label: 'Scheduler' },
+  { key: 'denoise', label: 'Denoise' },
+  { key: 'image', label: 'Input image', modes: ['img2img', 'inpainting'], hint: 'Load Image input (the mask is sent as the image alpha channel)' },
+  { key: 'crop', label: 'Crop', modes: ['img2img', 'inpainting'], hint: 'Combo inputs get "center"/"disabled"' },
+  { key: 'noise_mask', label: 'Noise mask', modes: ['inpainting'] },
+  { key: 'lora', label: 'LoRA template', nodeOnly: true, hint: 'Sample LoRA loader node; cloned and chained once per LoRA (removed when none)' },
+  { key: 'output', label: 'Output image', nodeOnly: true, hint: 'Save Image node(s); swapped for Preview Image when Save Image is off' },
+];
+const PARAM_TYPES = ['int', 'float', 'string', 'text', 'boolean', 'combo'];
+
+const RESOLUTIONS = {
+  '1024': { square: [1024, 1024], landscape: [1216, 832], portrait: [832, 1216] },
+  '1536': { square: [1536, 1536], landscape: [1824, 1248], portrait: [1248, 1824] },
+};
+
+/* ======================================================================
+   Small utilities
+   ====================================================================== */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const clone = (o) => (o == null ? o : JSON.parse(JSON.stringify(o)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
+
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k instanceof Node ? k : String(k));
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+    else if (k in e && typeof v !== 'string') e[k] = v;
+    else if (k === 'value') e.value = v;
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  return e;
+}
+
+function clampInt(v, lo, hi, def) {
+  let n = Math.round(Number(v));
+  if (!Number.isFinite(n)) n = def ?? lo;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+// 53-bit string/bytes hash (cyrb53); used for stable upload filenames.
+function hash53(bytes) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < bytes.length; i++) {
+    const ch = bytes[i];
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');
+}
+
+function randomSeed() { return Math.floor(Math.random() * 2 ** 48); }
+
+function slug(s) { return String(s || 'workflow').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'workflow'; }
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = h('a', { href: url, download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+function downloadJSON(obj, name) {
+  downloadBlob(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }), name);
+}
+
+function toast(msg, kind = '') {
+  const t = h('div', { class: 'toast ' + kind }, msg);
+  $('#toasts').append(t);
+  setTimeout(() => t.remove(), kind === 'error' ? 9000 : 4000);
+}
+
+function errText(e) {
+  if (!e) return 'Unknown error';
+  if (typeof e === 'string') return e;
+  return e.message || String(e);
+}
+
+function pickFile(accept) {
+  return new Promise((resolve) => {
+    const inp = h('input', { type: 'file', accept });
+    inp.addEventListener('change', () => resolve(inp.files[0] || null));
+    inp.click();
+  });
+}
+
+function readText(file) { return file.text(); }
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not decode image'));
+    img.src = src;
+  });
+}
+
+function canvasToBlob(c, type = 'image/png') {
+  return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed'))), type));
+}
+
+function makeDropZone(el, onFile) {
+  el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    el.classList.remove('drag');
+    const f = e.dataTransfer.files?.[0];
+    if (f) return onFile(f);
+    // Allow dragging an image from the gallery (or another page) by URL.
+    const uri = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    if (uri && /^(https?:|blob:|data:)/.test(uri.trim())) {
+      try {
+        const r = await fetch(uri.trim());
+        const b = await r.blob();
+        onFile(new File([b], 'dropped.' + (b.type.split('/')[1] || 'png'), { type: b.type }));
+      } catch (err) {
+        toast('Could not fetch the dropped image: ' + errText(err), 'error');
+      }
+    }
+  });
+}
+
+/* ---------- Minimal "stored" ZIP writer for Download All ---------- */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xffffffff;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+function makeZip(files) {
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), data = f.data, crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true);
+    parts.push(lh, name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(14, 0x21, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(ch, name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, p) => s + p.byteLength, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end], { type: 'application/zip' });
+}
+
+/* ---------- PNG text chunks (ComfyUI embeds workflows in its PNGs) ---------- */
+async function readPngText(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (!sig.every((b, i) => buf[i] === b)) throw new Error('Not a PNG file');
+  const dv = new DataView(buf.buffer);
+  const latin1 = new TextDecoder('latin1'), utf8 = new TextDecoder();
+  const out = {};
+  let p = 8;
+  while (p + 8 <= buf.length) {
+    const len = dv.getUint32(p);
+    const type = latin1.decode(buf.subarray(p + 4, p + 8));
+    const data = buf.subarray(p + 8, p + 8 + len);
+    if (type === 'tEXt') {
+      const z = data.indexOf(0);
+      out[latin1.decode(data.subarray(0, z))] = latin1.decode(data.subarray(z + 1));
+    } else if (type === 'iTXt') {
+      const z = data.indexOf(0);
+      const key = latin1.decode(data.subarray(0, z));
+      const compressed = data[z + 1];
+      let q = data.indexOf(0, z + 3);      // end of language tag
+      q = data.indexOf(0, q + 1);          // end of translated keyword
+      let text = data.subarray(q + 1);
+      if (compressed && typeof DecompressionStream !== 'undefined') {
+        const s = new Blob([text]).stream().pipeThrough(new DecompressionStream('deflate'));
+        text = new Uint8Array(await new Response(s).arrayBuffer());
+      }
+      out[key] = utf8.decode(text);
+    } else if (type === 'IEND') break;
+    p += 12 + len;
+  }
+  return out;
+}
+
+/* ======================================================================
+   Configuration
+   ====================================================================== */
+function t(node, input) { return input ? { node: String(node), input } : { node: String(node) }; }
+
+function defaultConfig() {
+  let wfs = {};
+  try { wfs = JSON.parse($('#default-workflows').textContent); } catch (e) { console.error('Default workflows missing', e); }
+  const common = {
+    model: [t(44, 'unet_name')], prompt: [t(11, 'text')], negative: [t(12, 'text')],
+    seed: [t(19, 'seed')], steps: [t(19, 'steps')], cfg: [t(19, 'cfg')],
+    sampler_name: [t(19, 'sampler_name')], scheduler: [t(19, 'scheduler')], denoise: [t(19, 'denoise')],
+    lora: [t(49)], output: [t(46)],
+  };
+  const withImage = {
+    ...common, width: [t(53, 'width')], height: [t(53, 'height')],
+    batch_repeat: [t(19, 'latent_image')], image: [t(51, 'image')], crop: [t(53, 'crop')],
+  };
+  return {
+    version: CONFIG_VERSION,
+    connection: { apiUrl: DEFAULT_API },
+    serverFeatures: { cads: false },
+    serverPreferences: { saveImage: true },
+    functionalWorkflows: [{
+      name: 'Anima',
+      modelFilter: 'anima',
+      loraFilter: 'anima',
+      workflows: {
+        txt2img: { workflow: wfs.txt2img || null, mappings: { ...common, width: [t(28, 'width')], height: [t(28, 'height')], batch_size: [t(28, 'batch_size')] } },
+        img2img: { workflow: wfs.img2img || null, mappings: clone(withImage) },
+        inpainting: { workflow: wfs.inpainting || null, mappings: { ...clone(withImage), noise_mask: [t(60, 'noise_mask')] } },
+      },
+      customParameters: [{
+        name: 'Resize method', type: 'combo', default: 'lanczos', options: [],
+        mappings: { img2img: [t(53, 'upscale_method')], inpainting: [t(53, 'upscale_method')] },
+      }, {
+        name: 'Filename prefix', type: 'string', default: '%date:yyyyMMdd%/Anima_%date:yyyyMMdd%', options: [],
+        mappings: { txt2img: [t(46, 'filename_prefix')], img2img: [t(46, 'filename_prefix')], inpainting: [t(46, 'filename_prefix')] },
+      }],
+    }],
+    customWorkflows: [],
+  };
+}
+
+function checkVersion(obj, what) {
+  if (!isObj(obj)) throw new Error(`${what}: expected a JSON object, got ${Array.isArray(obj) ? 'an array' : typeof obj}.`);
+  if (obj.version === undefined) throw new Error(`${what}: missing "version" field.`);
+  if (obj.version !== CONFIG_VERSION) throw new Error(`${what}: unsupported version ${JSON.stringify(obj.version)} (this build understands version ${CONFIG_VERSION}).`);
+}
+
+function normalizeTargets(list, where) {
+  if (list == null) return [];
+  if (!Array.isArray(list)) throw new Error(`${where}: mapping targets must be an array.`);
+  return list.map((x, i) => {
+    if (!isObj(x) || x.node == null) throw new Error(`${where}[${i}]: each target needs a "node".`);
+    return x.input != null ? { node: String(x.node), input: String(x.input) } : { node: String(x.node) };
+  });
+}
+
+function normalizeParam(p, where, perMode) {
+  if (!isObj(p)) throw new Error(`${where}: parameter must be an object.`);
+  if (!p.name) throw new Error(`${where}: parameter needs a "name".`);
+  const type = PARAM_TYPES.includes(p.type) ? p.type : 'string';
+  const out = { name: String(p.name), type, default: p.default ?? null, options: Array.isArray(p.options) ? p.options.map(String) : [] };
+  for (const k of ['min', 'max', 'step']) if (p[k] != null && p[k] !== '') out[k] = Number(p[k]);
+  if (perMode) {
+    out.mappings = {};
+    for (const m of MODES) out.mappings[m] = normalizeTargets(p.mappings?.[m], `${where}.mappings.${m}`);
+  } else {
+    out.mappings = normalizeTargets(p.mappings, `${where}.mappings`);
+  }
+  return out;
+}
+
+function normalizeFw(fw, where = 'functional workflow') {
+  if (!isObj(fw)) throw new Error(`${where}: expected an object.`);
+  const out = {
+    name: String(fw.name || 'Unnamed'),
+    modelFilter: String(fw.modelFilter || ''),
+    loraFilter: String(fw.loraFilter || ''),
+    workflows: {},
+    customParameters: [],
+  };
+  for (const m of MODES) {
+    const s = fw.workflows?.[m] || {};
+    if (s.workflow != null) validateWorkflowJson(s.workflow, `${where} ${m} workflow`);
+    const mappings = {};
+    for (const [k, v] of Object.entries(s.mappings || {})) mappings[k] = normalizeTargets(v, `${where}.workflows.${m}.mappings.${k}`);
+    out.workflows[m] = { workflow: s.workflow ?? null, mappings };
+  }
+  (fw.customParameters || []).forEach((p, i) => out.customParameters.push(normalizeParam(p, `${where}.customParameters[${i}]`, true)));
+  return out;
+}
+
+function normalizeCw(cw, where = 'custom workflow') {
+  if (!isObj(cw)) throw new Error(`${where}: expected an object.`);
+  if (cw.workflow != null) validateWorkflowJson(cw.workflow, `${where} workflow`);
+  return {
+    name: String(cw.name || 'Unnamed'),
+    workflow: cw.workflow ?? null,
+    parameters: (cw.parameters || []).map((p, i) => normalizeParam(p, `${where}.parameters[${i}]`, false)),
+  };
+}
+
+function normalizeConfig(c) {
+  checkVersion(c, 'Configuration');
+  return {
+    version: CONFIG_VERSION,
+    connection: { apiUrl: String(c.connection?.apiUrl || DEFAULT_API) },
+    serverFeatures: { cads: !!c.serverFeatures?.cads },
+    serverPreferences: { saveImage: c.serverPreferences?.saveImage !== false },
+    functionalWorkflows: (c.functionalWorkflows || []).map((f, i) => normalizeFw(f, `functionalWorkflows[${i}]`)),
+    customWorkflows: (c.customWorkflows || []).map((f, i) => normalizeCw(f, `customWorkflows[${i}]`)),
+  };
+}
+
+let config;
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(LS_CONFIG);
+    if (raw) return normalizeConfig(JSON.parse(raw));
+  } catch (e) {
+    console.error('Stored configuration is invalid; using defaults', e);
+    setTimeout(() => toast('Stored configuration was invalid and has been replaced by defaults:\n' + errText(e), 'error'), 0);
+  }
+  return defaultConfig();
+}
+function saveConfig() {
+  try { localStorage.setItem(LS_CONFIG, JSON.stringify(config)); }
+  catch (e) { toast('Could not save configuration: ' + errText(e), 'error'); }
+}
+
+/* ======================================================================
+   ComfyUI API client
+   ====================================================================== */
+const clientId = (crypto.randomUUID ? crypto.randomUUID() : 'ainvil-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+
+function formatComfyError(status, data) {
+  if (!data) return `HTTP ${status}`;
+  if (typeof data === 'string') return `HTTP ${status}: ${data.slice(0, 500)}`;
+  const lines = [];
+  if (data.error) lines.push(typeof data.error === 'string' ? data.error : [data.error.message, data.error.details].filter(Boolean).join(': '));
+  for (const [id, ne] of Object.entries(data.node_errors || {})) {
+    for (const e of ne.errors || []) lines.push(`  node #${id} (${ne.class_type}): ${e.message}${e.details ? ' — ' + e.details : ''}`);
+  }
+  return lines.join('\n') || `HTTP ${status}: ${JSON.stringify(data).slice(0, 500)}`;
+}
+
+const api = {
+  base() {
+    let u = (config.connection.apiUrl || '').trim() || DEFAULT_API;
+    if (!/^https?:\/\//i.test(u)) u = 'http://' + u;
+    return u.endsWith('/') ? u : u + '/';
+  },
+  url(path) { return new URL(path.replace(/^\//, ''), this.base()).href; },
+  async request(path, opts = {}) {
+    let r;
+    try { r = await fetch(this.url(path), opts); }
+    catch (e) {
+      throw new Error(`Could not reach ComfyUI at ${this.base()} (${errText(e)}).\n` +
+        'Check the address and that ComfyUI is running. If it is, the browser is probably blocking the request: ' +
+        'start ComfyUI with --enable-cors-header.');
+    }
+    const text = await r.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!r.ok) { const err = new Error(formatComfyError(r.status, data)); err.status = r.status; err.data = data; throw err; }
+    return data;
+  },
+  systemStats() { return this.request('system_stats'); },
+  objectInfo() { return this.request('object_info'); },
+  queuePrompt(prompt) {
+    return this.request('prompt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, client_id: clientId }) });
+  },
+  history(id) { return this.request('history/' + encodeURIComponent(id)); },
+  interrupt(promptId) {
+    return this.request('interrupt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(promptId ? { prompt_id: promptId } : {}) });
+  },
+  deleteQueued(ids) {
+    return this.request('queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ delete: ids }) });
+  },
+  async uploadImage(blob, name) {
+    const fd = new FormData();
+    fd.append('image', blob, name);
+    fd.append('type', 'input');
+    fd.append('subfolder', UPLOAD_SUBFOLDER);
+    fd.append('overwrite', 'true');
+    return this.request('upload/image', { method: 'POST', body: fd });
+  },
+  // ComfyUI copies the mask's alpha channel into the referenced image (alpha 0 = inpaint).
+  async uploadMask(maskBlob, name, originalRef) {
+    const fd = new FormData();
+    fd.append('image', maskBlob, name);
+    fd.append('type', 'input');
+    fd.append('subfolder', UPLOAD_SUBFOLDER);
+    fd.append('overwrite', 'true');
+    fd.append('original_ref', JSON.stringify({ filename: originalRef.name, subfolder: originalRef.subfolder || '', type: originalRef.type || 'input' }));
+    return this.request('upload/mask', { method: 'POST', body: fd });
+  },
+  viewUrl(img) {
+    const q = new URLSearchParams({ filename: img.filename, subfolder: img.subfolder || '', type: img.type || 'output' });
+    return this.url('view?' + q);
+  },
+};
+
+let OI = null;            // object_info from the server
+let oiStamp = 0;          // bumps when OI changes so template caches refresh
+let connected = false;
+let serverVersion = '';
+
+async function connect({ quiet = false } = {}) {
+  const cs = $('#connStatus');
+  cs.className = 'conn';
+  cs.textContent = 'Connecting…';
+  try {
+    const stats = await api.systemStats();
+    serverVersion = stats?.system?.comfyui_version || '';
+    OI = await api.objectInfo();
+    oiStamp++;
+    connected = true;
+    cs.className = 'conn ok';
+    cs.textContent = `ComfyUI ${serverVersion} · ${new URL(api.base()).host}`;
+    openSocket();
+    refreshGenerateOptions();
+    renderConfigLists();
+    return stats;
+  } catch (e) {
+    connected = false;
+    cs.className = 'conn bad';
+    cs.textContent = 'Not connected';
+    cs.title = errText(e);
+    if (!quiet) throw e;
+  }
+}
+
+async function ensureObjectInfo() {
+  if (!OI) await connect({ quiet: true });
+}
+
+/* ---------- WebSocket progress ---------- */
+let ws = null, wsBase = '';
+const progress = { promptIds: new Set(), running: null };
+function openSocket() {
+  const base = api.base();
+  if (ws && wsBase === base && ws.readyState <= 1) return;
+  try { ws?.close(); } catch {}
+  wsBase = base;
+  try {
+    ws = new WebSocket(base.replace(/^http/i, 'ws') + 'ws?clientId=' + encodeURIComponent(clientId));
+  } catch { ws = null; return; }
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') return;
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    const d = msg.data || {};
+    if (msg.type === 'status') {
+      const q = d.status?.exec_info?.queue_remaining;
+      $('#queueInfo').textContent = q != null ? `· server queue: ${q}` : '';
+    } else if (msg.type === 'progress' && progress.promptIds.has(d.prompt_id)) {
+      progress.running = d.prompt_id;
+      setProgress(d.max ? d.value / d.max : 0);
+    } else if (msg.type === 'executing' && progress.promptIds.has(d.prompt_id)) {
+      progress.running = d.node == null ? null : d.prompt_id;
+    }
+  };
+  ws.onclose = () => {
+    // Reconnect quietly while connected to the same server.
+    setTimeout(() => { if (connected && wsBase === api.base()) openSocket(); }, 3000);
+  };
+}
+function setProgress(f) { $('#progressBar').style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; }
+
+/* ======================================================================
+   Workflow conversion (UI format -> API format) and inspection
+   ====================================================================== */
+const CONTROL_VALUES = new Set(['fixed', 'increment', 'decrement', 'randomize']);
+const VIRTUAL_NODES = new Set(['Note', 'MarkdownNote', 'Reroute', 'PrimitiveNode']);
+const WIDGET_TYPES = new Set(['INT', 'FLOAT', 'STRING', 'BOOLEAN', 'COMBO']);
+
+function isUiWorkflow(wf) { return isObj(wf) && Array.isArray(wf.nodes); }
+function isApiWorkflow(wf) {
+  return isObj(wf) && !Array.isArray(wf.nodes) && Object.keys(wf).length > 0 &&
+    Object.values(wf).every((n) => isObj(n) && typeof n.class_type === 'string');
+}
+function validateWorkflowJson(wf, what) {
+  if (!isUiWorkflow(wf) && !isApiWorkflow(wf)) throw new Error(`${what}: not a ComfyUI workflow (expected UI format with "nodes" or API format with "class_type" entries).`);
+}
+
+function specInputs(spec) {
+  const out = [];
+  for (const sec of ['required', 'optional']) {
+    const defs = spec?.input?.[sec] || {};
+    const order = spec?.input_order?.[sec] || Object.keys(defs);
+    for (const name of order) if (defs[name]) out.push([name, defs[name]]);
+  }
+  return out;
+}
+function specFor(classType, input) {
+  const spec = OI?.[classType];
+  return spec?.input?.required?.[input] || spec?.input?.optional?.[input] || null;
+}
+function isWidgetSpec(s) {
+  if (!Array.isArray(s)) return false;
+  if (s[1]?.forceInput) return false;
+  return Array.isArray(s[0]) || WIDGET_TYPES.has(s[0]);
+}
+function comboOptions(s) {
+  if (!Array.isArray(s)) return null;
+  if (Array.isArray(s[0])) return s[0];
+  if (s[0] === 'COMBO' && Array.isArray(s[1]?.options)) return s[1].options;
+  return null;
+}
+
+function nodeWidgetValues(node, oi) {
+  const wv = node.widgets_values;
+  if (isObj(wv)) return { ...wv };
+  const spec = oi?.[node.type];
+  if (isObj(node.widgets_values_named)) {
+    const out = {};
+    for (const [k, v] of Object.entries(node.widgets_values_named)) {
+      if (spec ? specInputs(spec).some(([n]) => n === k) : !['control_after_generate', 'upload'].includes(k)) out[k] = v;
+    }
+    return out;
+  }
+  const vals = Array.isArray(wv) ? wv : [];
+  let names;
+  if (spec) names = specInputs(spec).filter(([, s]) => isWidgetSpec(s)).map(([n, s]) => ({ n, numeric: s[0] === 'INT' || s[0] === 'FLOAT' }));
+  else names = (node.inputs || []).filter((i) => i.widget).map((i) => ({ n: i.widget.name, numeric: i.type === 'INT' || i.type === 'FLOAT' }));
+  const out = {};
+  let i = 0;
+  for (const { n, numeric } of names) {
+    if (i >= vals.length) break;
+    out[n] = vals[i++];
+    if (numeric && CONTROL_VALUES.has(vals[i])) i++;  // skip "control after generate"
+  }
+  return out;
+}
+
+function uiToApi(wf, oi) {
+  if (wf.definitions?.subgraphs?.length) throw new Error('Workflows containing subgraphs are not supported; unpack them in ComfyUI first.');
+  const nodes = new Map(wf.nodes.map((n) => [String(n.id), n]));
+  const links = new Map();
+  for (const l of wf.links || []) {
+    if (Array.isArray(l)) links.set(l[0], { o: String(l[1]), os: l[2] });
+    else if (isObj(l)) links.set(l.id, { o: String(l.origin_id), os: l.origin_slot });
+  }
+  const isVirtual = (n) => VIRTUAL_NODES.has(n.type) || (oi && !oi[n.type] && !n.type.includes('/'));
+  const resolve = (linkId, depth = 0) => {
+    const l = links.get(linkId);
+    if (!l || depth > 50) return undefined;
+    const src = nodes.get(l.o);
+    if (!src) return undefined;
+    if (src.type === 'Reroute') {
+      const inp = src.inputs?.[0];
+      return inp?.link != null ? resolve(inp.link, depth + 1) : undefined;
+    }
+    if (src.type === 'PrimitiveNode') return { value: src.widgets_values?.[0] };
+    if (src.mode === 4) { // bypassed: pass through an input of the same type
+      const outType = src.outputs?.[l.os]?.type;
+      const inp = (src.inputs || []).find((i) => i.link != null && i.type === outType);
+      return inp ? resolve(inp.link, depth + 1) : undefined;
+    }
+    if (src.mode === 2) return undefined;
+    return [l.o, l.os];
+  };
+  const out = {};
+  for (const n of wf.nodes) {
+    if (n.mode === 2 || n.mode === 4) continue;
+    if (VIRTUAL_NODES.has(n.type)) continue;
+    if (oi && !oi[n.type]) {
+      if (isVirtual(n)) continue;
+    }
+    const inputs = nodeWidgetValues(n, oi);
+    for (const inp of n.inputs || []) {
+      if (inp.link == null) continue;
+      const name = inp.widget?.name || inp.name;
+      const r = resolve(inp.link);
+      if (Array.isArray(r)) inputs[name] = r;
+      else if (r && 'value' in r) inputs[name] = r.value;
+    }
+    out[String(n.id)] = { class_type: n.type, inputs, _meta: { title: n.title || OI?.[n.type]?.display_name || n.type } };
+  }
+  return out;
+}
+
+function toApi(wf, oi = OI) {
+  if (isUiWorkflow(wf)) return uiToApi(wf, oi);
+  if (isApiWorkflow(wf)) return clone(wf);
+  throw new Error('Not a ComfyUI workflow');
+}
+
+const apiCache = new WeakMap();
+function templateApi(wf) {
+  const c = apiCache.get(wf);
+  if (c && c.stamp === oiStamp) return c.api;
+  const a = toApi(wf);
+  apiCache.set(wf, { stamp: oiStamp, api: a });
+  return a;
+}
+
+function describeNodes(wf) {
+  if (!wf) return [];
+  try {
+    const a = templateApi(wf);
+    return Object.entries(a)
+      .sort((x, y) => Number(x[0]) - Number(y[0]) || x[0].localeCompare(y[0]))
+      .map(([id, n]) => {
+        const names = new Set(Object.keys(n.inputs));
+        for (const [k] of specInputs(OI?.[n.class_type])) names.add(k);
+        const inputs = [...names].map((k) => ({ name: k, linked: Array.isArray(n.inputs[k]) }));
+        return { id, type: n.class_type, title: n._meta?.title || n.class_type, inputs };
+      });
+  } catch (e) {
+    console.warn(e);
+    return [];
+  }
+}
+
+async function readWorkflowFile(file) {
+  if (/\.png$/i.test(file.name) || file.type === 'image/png') {
+    const txt = await readPngText(file);
+    const raw = txt.workflow || txt.prompt;
+    if (!raw) throw new Error('This PNG has no embedded ComfyUI workflow.');
+    const wf = JSON.parse(raw);
+    validateWorkflowJson(wf, file.name);
+    return wf;
+  }
+  let wf;
+  try { wf = JSON.parse(await readText(file)); }
+  catch (e) { throw new Error(`${file.name}: invalid JSON (${errText(e)})`); }
+  validateWorkflowJson(wf, file.name);
+  return wf;
+}
+
+/* ---------- Mapping auto-detection ---------- */
+function autoDetectMappings(wf, mode) {
+  const a = toApi(wf);
+  const m = {};
+  const ent = Object.entries(a);
+  const add = (k, id, input) => (m[k] ??= []).push(input ? t(id, input) : t(id));
+  const ks = ent.find(([, n]) => 'steps' in n.inputs && 'cfg' in n.inputs && ('seed' in n.inputs || 'noise_seed' in n.inputs));
+  if (ks) {
+    const [id, n] = ks;
+    add('seed', id, 'seed' in n.inputs ? 'seed' : 'noise_seed');
+    for (const k of ['steps', 'cfg', 'sampler_name', 'scheduler', 'denoise']) if (k in n.inputs) add(k, id, k);
+    const trace = (ref, which, depth = 0) => {
+      if (!Array.isArray(ref) || depth > 8) return null;
+      const src = a[ref[0]];
+      if (!src) return null;
+      if (typeof src.inputs.text === 'string') return ref[0];
+      const next = src.inputs[which] ?? src.inputs.conditioning ?? src.inputs.conditioning_1;
+      return trace(next, which, depth + 1);
+    };
+    const p = trace(n.inputs.positive, 'positive'); if (p) add('prompt', p, 'text');
+    const q = trace(n.inputs.negative, 'negative'); if (q) add('negative', q, 'text');
+  }
+  const loaderPrefs = [['UNETLoader', 'unet_name'], ['CheckpointLoaderSimple', 'ckpt_name'], ['CheckpointLoader', 'ckpt_name'], ['UnetLoaderGGUF', 'unet_name']];
+  for (const [cls, inp] of loaderPrefs) {
+    const f = ent.find(([, n]) => n.class_type === cls);
+    if (f) { add('model', f[0], inp); break; }
+  }
+  const lora = ent.find(([, n]) => /lora/i.test(n.class_type) && 'lora_name' in n.inputs);
+  if (lora) add('lora', lora[0]);
+  for (const [id, n] of ent) if (n.class_type === 'SaveImage') add('output', id);
+  if (!m.output) for (const [id, n] of ent) if (n.class_type === 'PreviewImage') add('output', id);
+  const latent = ent.find(([, n]) => /EmptyLatentImage|EmptySD3LatentImage|EmptyHunyuanLatent/.test(n.class_type) || ('width' in n.inputs && 'height' in n.inputs && 'batch_size' in n.inputs));
+  if (latent) { add('width', latent[0], 'width'); add('height', latent[0], 'height'); add('batch_size', latent[0], 'batch_size'); }
+  if (mode !== 'txt2img') {
+    const load = ent.find(([, n]) => n.class_type === 'LoadImage');
+    if (load) add('image', load[0], 'image');
+    const scale = ent.find(([, n]) => Array.isArray(n.inputs.image) && 'width' in n.inputs && 'height' in n.inputs);
+    if (scale) {
+      if (!latent) { add('width', scale[0], 'width'); add('height', scale[0], 'height'); }
+      if ('crop' in scale[1].inputs) add('crop', scale[0], 'crop');
+    }
+    const nm = ent.find(([, n]) => 'noise_mask' in n.inputs);
+    if (nm && mode === 'inpainting') add('noise_mask', nm[0], 'noise_mask');
+    if (!latent && ks && Array.isArray(ks[1].inputs.latent_image)) add('batch_repeat', ks[0], 'latent_image');
+  }
+  return m;
+}
+
+/* ======================================================================
+   Building a prompt from a functional workflow
+   ====================================================================== */
+function nextNodeId(a) {
+  let max = 0;
+  for (const k of Object.keys(a)) { const n = parseInt(k, 10); if (Number.isFinite(n) && n > max) max = n; }
+  return () => String(++max);
+}
+
+function coerce(type, v) {
+  switch (type) {
+    case 'int': return Math.round(Number(v) || 0);
+    case 'float': return Number(v) || 0;
+    case 'boolean': return v === true || v === 'true';
+    default: return v == null ? '' : String(v);
+  }
+}
+
+function applyLoras(a, nodeId, loras) {
+  const tmpl = a[nodeId];
+  if (!tmpl) throw new Error(`LoRA template node #${nodeId} is not in the workflow.`);
+  const outTypes = OI?.[tmpl.class_type]?.output || (tmpl.inputs.clip !== undefined ? ['MODEL', 'CLIP'] : ['MODEL']);
+  const tmplSpecs = specInputs(OI?.[tmpl.class_type]);
+  // Output slot -> passthrough input name (MODEL -> model, CLIP -> clip).
+  const pass = outTypes.map((ty) => tmplSpecs.find(([, s]) => s[0] === ty)?.[0] || ty.toLowerCase());
+  const nameKey = 'lora_name' in tmpl.inputs ? 'lora_name' : Object.keys(tmpl.inputs).find((k) => typeof tmpl.inputs[k] === 'string');
+  const strengthKeys = Object.keys(tmpl.inputs).filter((k) => /^strength/.test(k));
+  const refs = [];
+  for (const n of Object.values(a)) {
+    for (const [k, v] of Object.entries(n.inputs)) if (Array.isArray(v) && v[0] === nodeId) refs.push([n, k, v[1]]);
+  }
+  delete a[nodeId];
+  const newId = nextNodeId(a);
+  let prev = null;
+  for (const l of loras) {
+    const id = newId();
+    const n = clone(tmpl);
+    n.inputs[nameKey] = l.name;
+    for (const k of strengthKeys) n.inputs[k] = Number(l.weight);
+    if (prev) pass.forEach((inp, slot) => { if (inp in n.inputs) n.inputs[inp] = [prev, slot]; });
+    n._meta = { title: `LoRA ${l.name}` };
+    a[id] = n;
+    prev = id;
+  }
+  for (const [n, k, slot] of refs) n.inputs[k] = prev ? [prev, slot] : clone(tmpl.inputs[pass[slot]]);
+}
+
+function insertRepeat(a, target, amount) {
+  const n = a[target.node];
+  if (!n) throw new Error(`Batch repeat target node #${target.node} is not in the workflow.`);
+  const src = n.inputs[target.input];
+  if (!Array.isArray(src)) throw new Error(`Batch repeat target #${target.node}.${target.input} is not a linked input.`);
+  const id = nextNodeId(a)();
+  a[id] = { class_type: 'RepeatLatentBatch', inputs: { samples: src, amount }, _meta: { title: 'Repeat Latent Batch' } };
+  n.inputs[target.input] = [id, 0];
+}
+
+// The ComfyUI frontend (not the server) expands %date:FORMAT% and %Node title.widget% in
+// filename_prefix, so we do the same before queueing.
+function formatDate(fmt, d = new Date()) {
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  const parts = { yyyy: d.getFullYear(), yy: pad(d.getFullYear() % 100), MM: pad(d.getMonth() + 1), M: d.getMonth() + 1, dd: pad(d.getDate()), d: d.getDate(), hh: pad(d.getHours()), h: d.getHours(), mm: pad(d.getMinutes()), m: d.getMinutes(), ss: pad(d.getSeconds()), s: d.getSeconds() };
+  return fmt.replace(/yyyy|yy|MM|M|dd|d|hh|h|mm|m|ss|s/g, (k) => parts[k]);
+}
+function expandFilenamePrefixes(a) {
+  const now = new Date();
+  for (const n of Object.values(a)) {
+    const v = n.inputs.filename_prefix;
+    if (typeof v !== 'string' || !v.includes('%')) continue;
+    n.inputs.filename_prefix = v.replace(/%([^%]+)%/g, (whole, expr) => {
+      if (expr.startsWith('date:')) return formatDate(expr.slice(5), now);
+      const dot = expr.lastIndexOf('.');
+      if (dot < 0) return whole;
+      const title = expr.slice(0, dot), widget = expr.slice(dot + 1);
+      const src = Object.values(a).find((x) => x._meta?.title === title || x.class_type === title);
+      const val = src?.inputs?.[widget];
+      return val != null && !Array.isArray(val) ? String(val) : whole;
+    });
+  }
+}
+
+function outputNodeIds(a, m) {
+  const mapped = (m.output || []).map((x) => x.node).filter((id) => a[id]);
+  if (mapped.length) return mapped;
+  return Object.keys(a).filter((id) => ['SaveImage', 'PreviewImage'].includes(a[id].class_type));
+}
+
+function buildPrompt(fw, mode, p) {
+  const slot = fw.workflows?.[mode];
+  if (!slot?.workflow) throw new Error(`"${fw.name}" has no ${mode} workflow configured.`);
+  const a = clone(templateApi(slot.workflow));
+  const m = slot.mappings || {};
+  const set = (key, val, xf) => {
+    for (const tg of m[key] || []) {
+      if (!tg.node) continue;
+      const n = a[tg.node];
+      if (!n) throw new Error(`Mapping "${key}" for ${mode} points at node #${tg.node}, which is not in the workflow.`);
+      if (!tg.input) continue;
+      n.inputs[tg.input] = xf ? xf(n.inputs[tg.input], val) : val;
+    }
+  };
+  if (p.model) set('model', p.model);
+  set('prompt', p.prompt);
+  set('negative', p.negative);
+  set('width', p.width);
+  set('height', p.height);
+  set('batch_size', p.batch_size);
+  set('seed', p.seed);
+  set('steps', p.steps);
+  set('cfg', p.cfg);
+  if (p.sampler_name) set('sampler_name', p.sampler_name);
+  if (p.scheduler) set('scheduler', p.scheduler);
+  set('denoise', p.denoise);
+  if (mode !== 'txt2img') {
+    set('image', p.image);
+    set('crop', p.crop, (orig, v) => (typeof orig === 'string' ? (v ? 'center' : 'disabled') : v));
+    set('noise_mask', p.noise_mask);
+  }
+  for (const cp of fw.customParameters || []) {
+    const targets = cp.mappings?.[mode] || [];
+    if (!targets.length) continue;
+    const v = coerce(cp.type === 'text' || cp.type === 'combo' ? 'string' : cp.type, p.custom?.[cp.name] ?? cp.default);
+    if (cp.type === 'combo' && v === '') continue;
+    for (const tg of targets) {
+      if (!a[tg.node]) throw new Error(`Custom parameter "${cp.name}" for ${mode} points at node #${tg.node}, which is not in the workflow.`);
+      if (tg.input) a[tg.node].inputs[tg.input] = v;
+    }
+  }
+  if (p.batch_size > 1) for (const tg of m.batch_repeat || []) if (tg.node && tg.input) insertRepeat(a, tg, p.batch_size);
+  const loraT = (m.lora || []).find((x) => x.node);
+  if (loraT) applyLoras(a, loraT.node, p.loras || []);
+  expandFilenamePrefixes(a);
+  if (!p.saveImage) {
+    for (const id of outputNodeIds(a, m)) {
+      if (a[id].class_type === 'SaveImage') a[id] = { class_type: 'PreviewImage', inputs: { images: a[id].inputs.images }, _meta: { title: 'Preview Image' } };
+    }
+  }
+  return a;
+}
+
+function optionsFor(fw, key) {
+  if (!fw || !OI) return null;
+  for (const mode of MODES) {
+    const slot = fw.workflows?.[mode];
+    if (!slot?.workflow) continue;
+    for (const tg of slot.mappings?.[key] || []) {
+      try {
+        const n = templateApi(slot.workflow)[tg.node];
+        if (!n) continue;
+        const input = tg.input || (key === 'lora' ? 'lora_name' : null);
+        const opts = comboOptions(specFor(n.class_type, input));
+        if (opts) return opts;
+      } catch { /* ignore broken templates here */ }
+    }
+  }
+  return null;
+}
+
+function templateDefaults(fw) {
+  const d = {};
+  for (const mode of MODES) {
+    const slot = fw?.workflows?.[mode];
+    if (!slot?.workflow) continue;
+    let a;
+    try { a = templateApi(slot.workflow); } catch { continue; }
+    for (const k of ['model', 'steps', 'cfg', 'sampler_name', 'scheduler', 'width', 'height']) {
+      if (d[k] !== undefined) continue;
+      const tg = (slot.mappings?.[k] || [])[0];
+      const v = tg && a[tg.node]?.inputs?.[tg.input];
+      if (v !== undefined && !Array.isArray(v)) d[k] = v;
+    }
+  }
+  return d;
+}
+
+function filterList(list, pattern) {
+  if (!pattern) return list;
+  let re;
+  try { re = new RegExp(pattern, 'i'); } catch { return list.filter((x) => x.toLowerCase().includes(pattern.toLowerCase())); }
+  return list.filter((x) => re.test(x));
+}
+
+/* ======================================================================
+   Generate tab state
+   ====================================================================== */
+let gen;
+const input = { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null };
+const gallery = { items: [], sel: 0 };
+const uploadCache = new Map();
+let busy = false, cancelRequested = false, activeJobs = [];
+
+function currentFw() {
+  const list = config.functionalWorkflows;
+  return list.find((f) => f.name === gen.fwName) || list[0] || null;
+}
+
+function genDefaults(fw) {
+  const d = templateDefaults(fw);
+  const steps = clampInt(d.steps ?? 30, 1, 10000);
+  return {
+    fwName: fw?.name || '',
+    model: d.model || '',
+    prompt: '',
+    negative: '',
+    batchCount: 1,
+    width: d.width || 1024,
+    height: d.height || 1024,
+    resCustom: false,
+    seed: randomSeed(),
+    randomSeed: true,
+    batchSize: 1,
+    steps,
+    cfg: d.cfg ?? 4,
+    sampler: d.sampler_name || 'euler',
+    scheduler: d.scheduler || 'normal',
+    denoiseStep: Math.round(steps * 0.4),
+    crop: false,
+    noiseMask: true,
+    loras: [],
+    custom: {},
+  };
+}
+
+function loadGenState() {
+  const fw = config.functionalWorkflows[0];
+  const base = genDefaults(fw);
+  try {
+    const raw = localStorage.getItem(LS_GEN);
+    if (raw) return { ...base, ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return base;
+}
+let genSaveTimer = 0;
+function saveGenSoon() {
+  clearTimeout(genSaveTimer);
+  genSaveTimer = setTimeout(() => { try { localStorage.setItem(LS_GEN, JSON.stringify(gen)); } catch {} }, 300);
+}
+
+function currentMode() {
+  if (!input.img) return 'txt2img';
+  return input.mask ? 'inpainting' : 'img2img';
+}
+
+/* ---------- rendering ---------- */
+function fillSelect(sel, options, value, { emptyLabel } = {}) {
+  const opts = [...(options || [])];
+  if (value && !opts.includes(value)) opts.unshift(value);
+  sel.replaceChildren(
+    ...(opts.length ? [] : [h('option', { value: '' }, emptyLabel || '(none)')]),
+    ...opts.map((o) => h('option', { value: o, title: o }, o + (options && !options.includes(o) ? ' (not on server)' : ''))),
+  );
+  sel.value = value || opts[0] || '';
+}
+
+function refreshFwSelect() {
+  const sel = $('#fwSelect');
+  sel.replaceChildren(...config.functionalWorkflows.map((f) => h('option', { value: f.name }, f.name)));
+  if (!config.functionalWorkflows.length) sel.append(h('option', { value: '' }, '(none configured)'));
+  const fw = currentFw();
+  sel.value = fw?.name || '';
+  if (fw) gen.fwName = fw.name;
+}
+
+function refreshGenerateOptions() {
+  const fw = currentFw();
+  const models = optionsFor(fw, 'model');
+  fillSelect($('#modelSelect'), models ? filterList(models, fw?.modelFilter) : null, gen.model);
+  gen.model = $('#modelSelect').value;
+  fillSelect($('#sampler'), optionsFor(fw, 'sampler_name'), gen.sampler);
+  fillSelect($('#scheduler'), optionsFor(fw, 'scheduler'), gen.scheduler);
+  renderCustomParams();
+  renderLoras();
+  $('#cadsStatus').textContent = config.serverFeatures.cads ? 'The server supports CADS (enabled in Server Features).' : 'Enable CADS in Configuration › Server Features when the server supports it.';
+}
+
+function renderGen() {
+  refreshFwSelect();
+  refreshGenerateOptions();
+  $('#prompt').value = gen.prompt;
+  $('#negative').value = gen.negative;
+  $('#batchCount').value = gen.batchCount;
+  $('#width').value = gen.width;
+  $('#height').value = gen.height;
+  $('#seed').value = gen.seed;
+  $('#randomSeed').checked = gen.randomSeed;
+  $('#batchSize').value = gen.batchSize;
+  $('#steps').value = gen.steps;
+  $('#cfg').value = gen.cfg;
+  $('#crop').checked = gen.crop;
+  $('#noiseMask').checked = gen.noiseMask;
+  renderRes();
+  renderDenoise();
+  renderMode();
+}
+
+function matchRes(w, h) {
+  for (const [profile, ratios] of Object.entries(RESOLUTIONS)) {
+    for (const [ratio, [rw, rh]] of Object.entries(ratios)) if (rw === Number(w) && rh === Number(h)) return { profile, ratio };
+  }
+  return null;
+}
+function renderRes() {
+  const m = gen.resCustom ? null : matchRes(gen.width, gen.height);
+  $$('#resProfiles button').forEach((b) => b.classList.toggle('on', b.dataset.custom ? !m : m?.profile === b.dataset.profile));
+  $$('#resRatios button').forEach((b) => b.classList.toggle('on', m?.ratio === b.dataset.ratio));
+}
+function setRes(profile, ratio) {
+  const [w, hh] = RESOLUTIONS[profile][ratio];
+  gen.width = w; gen.height = hh; gen.resCustom = false;
+  $('#width').value = w; $('#height').value = hh;
+  renderRes();
+  saveGenSoon();
+}
+
+function denoiseValue() {
+  const steps = clampInt(gen.steps, 1, 10000);
+  return Math.round((1 - clampInt(gen.denoiseStep, 0, steps) / steps) * 10000) / 10000;
+}
+function renderDenoise() {
+  const steps = clampInt(gen.steps, 1, 10000);
+  gen.denoiseStep = clampInt(gen.denoiseStep, 0, steps);
+  const sl = $('#denoiseSlider');
+  sl.max = steps;
+  sl.value = gen.denoiseStep;
+  $('#denoiseStep').max = steps;
+  $('#denoiseStep').value = gen.denoiseStep;
+  if (document.activeElement !== $('#denoiseValue')) $('#denoiseValue').value = denoiseValue().toFixed(2);
+}
+
+function renderMode() {
+  const mode = currentMode();
+  const b = $('#modeBadge');
+  b.textContent = mode;
+  b.className = 'badge ' + mode;
+  const hint = {
+    txt2img: 'No input image: txt2img mode uses an empty latent and denoise 1.00 (step 0).',
+    img2img: 'Input image loaded: img2img mode. Denoise starts sampling at the denoise step.',
+    inpainting: 'Image and mask loaded: inpainting mode. Painted areas are regenerated.',
+  }[mode];
+  $('#inparamsHint').textContent = hint;
+}
+
+function renderCustomParams() {
+  const fw = currentFw();
+  const box = $('#customParams');
+  const params = fw?.customParameters || [];
+  if (!params.length) { box.replaceChildren(h('p', { class: 'hint' }, 'This workflow has no custom parameters.')); return; }
+  const vals = (gen.custom[fw.name] ??= {});
+  box.replaceChildren(...params.map((cp) => {
+    const v = vals[cp.name] ?? cp.default ?? '';
+    const update = (val) => { vals[cp.name] = val; saveGenSoon(); };
+    let ctl;
+    switch (cp.type) {
+      case 'int':
+      case 'float':
+        ctl = h('input', { type: 'number', min: cp.min ?? '', max: cp.max ?? '', step: cp.step ?? (cp.type === 'int' ? 1 : 0.01), value: v, oninput: (e) => update(e.target.value === '' ? null : Number(e.target.value)) });
+        break;
+      case 'boolean':
+        return h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!v, onchange: (e) => update(e.target.checked) }), cp.name);
+      case 'text':
+        ctl = h('textarea', { rows: 3, value: v, oninput: (e) => update(e.target.value) });
+        break;
+      case 'combo': {
+        ctl = h('select', { onchange: (e) => update(e.target.value) });
+        const opts = cp.options?.length ? cp.options : customOptions(fw, cp);
+        fillSelect(ctl, opts, v);
+        if (vals[cp.name] == null && ctl.value) vals[cp.name] = ctl.value;
+        break;
+      }
+      default:
+        ctl = h('input', { type: 'text', value: v, oninput: (e) => update(e.target.value) });
+    }
+    return h('label', {}, cp.name, ctl);
+  }));
+}
+function customOptions(fw, cp) {
+  if (!OI) return null;
+  for (const mode of MODES) {
+    const slot = fw.workflows?.[mode];
+    if (!slot?.workflow) continue;
+    for (const tg of cp.mappings?.[mode] || []) {
+      try {
+        const n = templateApi(slot.workflow)[tg.node];
+        const opts = n && comboOptions(specFor(n.class_type, tg.input));
+        if (opts) return opts;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+function renderLoras() {
+  const fw = currentFw();
+  const all = optionsFor(fw, 'lora');
+  const opts = all ? filterList(all, fw?.loraFilter) : null;
+  const hasTemplate = MODES.some((m) => (fw?.workflows?.[m]?.mappings?.lora || []).some((x) => x.node));
+  const box = $('#loraList');
+  if (!gen.loras.length) {
+    box.replaceChildren(h('div', { class: 'lora-empty' }, hasTemplate ? 'No LoRAs active.' : 'This workflow has no LoRA template node mapped, so LoRAs are ignored.'));
+    return;
+  }
+  box.replaceChildren(...gen.loras.map((l, i) => {
+    const sel = h('select', { onchange: (e) => { l.name = e.target.value; saveGenSoon(); } });
+    fillSelect(sel, opts, l.name, { emptyLabel: '(no LoRAs on server)' });
+    l.name = sel.value;
+    return h('div', { class: 'lora-row' },
+      sel,
+      h('input', { type: 'number', step: 0.05, value: l.weight, title: 'Weight', oninput: (e) => { l.weight = Number(e.target.value); saveGenSoon(); } }),
+      h('button', { class: 'small danger', title: 'Remove', onclick: () => { gen.loras.splice(i, 1); renderLoras(); saveGenSoon(); } }, '✕'));
+  }));
+}
+
+/* ---------- gallery ---------- */
+function renderGallery() {
+  const main = $('#galleryMain'), thumbs = $('#galleryThumbs'), info = $('#galleryInfo');
+  const items = gallery.items;
+  if (!items.length) {
+    main.replaceChildren(h('div', { class: 'placeholder' }, busy ? 'Generating…' : 'No images yet'));
+    thumbs.replaceChildren();
+    info.textContent = '';
+    return;
+  }
+  gallery.sel = Math.min(gallery.sel, items.length - 1);
+  const it = items[gallery.sel];
+  main.replaceChildren(h('img', { src: it.src, alt: it.filename, onclick: () => openViewer(gallery.sel) }));
+  info.textContent = `${gallery.sel + 1} / ${items.length} · seed ${it.seed}${it.batchIndex ? ` (batch #${it.batchIndex})` : ''} · ${it.filename}`;
+  thumbs.replaceChildren(...items.map((x, i) => h('img', {
+    src: x.src, loading: 'lazy', class: i === gallery.sel ? 'sel' : '', alt: x.filename, title: `seed ${x.seed}`,
+    onclick: () => { gallery.sel = i; renderGallery(); },
+  })));
+}
+
+function openViewer(i) {
+  gallery.sel = i;
+  $('#viewerImg').src = gallery.items[i].src;
+  $('#viewer').hidden = false;
+  renderGallery();
+}
+function closeViewer() { $('#viewer').hidden = true; $('#viewerImg').removeAttribute('src'); }
+function stepViewer(d) {
+  if (!gallery.items.length) return;
+  openViewer((gallery.sel + d + gallery.items.length) % gallery.items.length);
+}
+
+// Images are fetched (CORS) into blob URLs: Firefox refuses <img> loads of http:// URLs
+// from a file:// page, and having the blob also makes downloads simple.
+async function galleryItem(im, seed, batchIndex) {
+  const url = api.viewUrl(im);
+  const it = { ...im, url, src: url, seed, batchIndex, blob: null };
+  try {
+    it.blob = await fetchBlob(url);
+    it.src = URL.createObjectURL(it.blob);
+  } catch (e) { console.warn('Falling back to direct image URL', e); }
+  return it;
+}
+function resetGallery() {
+  for (const it of gallery.items) if (it.blob) URL.revokeObjectURL(it.src);
+  gallery.items = [];
+  gallery.sel = 0;
+}
+async function itemBlob(it) { return it.blob || fetchBlob(it.url); }
+
+async function fetchBlob(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.blob();
+}
+
+async function downloadSelected() {
+  const it = gallery.items[gallery.sel];
+  if (!it) return toast('No image selected');
+  try { downloadBlob(await itemBlob(it), it.filename); }
+  catch { window.open(it.url, '_blank'); }
+}
+
+async function downloadAll() {
+  if (!gallery.items.length) return toast('No images to download');
+  if (gallery.items.length === 1) return downloadSelected();
+  try {
+    toast(`Packing ${gallery.items.length} images…`);
+    const used = new Set();
+    const files = [];
+    for (const it of gallery.items) {
+      let name = it.filename, n = 1;
+      while (used.has(name)) name = it.filename.replace(/(\.\w+)?$/, `-${n++}$1`);
+      used.add(name);
+      files.push({ name, data: new Uint8Array(await (await itemBlob(it)).arrayBuffer()) });
+    }
+    downloadBlob(makeZip(files), `ainvil-batch-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`);
+  } catch (e) {
+    toast('Download failed: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error');
+  }
+}
+
+/* ---------- status ---------- */
+function setStatus(msg, kind = '') {
+  const s = $('#genStatus');
+  s.textContent = msg;
+  s.className = 'status ' + kind;
+}
+function setBusy(b) {
+  busy = b;
+  $('#btnGenerate').disabled = b;
+  $('#btnWorkflow').disabled = b;
+  $('#btnCancel').hidden = !b;
+  if (!b) setProgress(0);
+}
+
+/* ---------- uploads ---------- */
+function maskAlphaHash() {
+  const c = input.mask;
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const a = new Uint8Array(d.length / 4);
+  for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3];
+  return hash53(a);
+}
+
+// Mask for ComfyUI's /upload/mask: alpha 0 where we inpaint.
+async function serverMaskBlob() {
+  const src = input.mask;
+  const c = h('canvas', { width: src.width, height: src.height });
+  const ctx = c.getContext('2d');
+  const sd = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
+  const out = ctx.createImageData(src.width, src.height);
+  for (let i = 0; i < sd.length; i += 4) out.data[i + 3] = 255 - sd[i + 3];
+  ctx.putImageData(out, 0, 0);
+  return canvasToBlob(c);
+}
+
+async function ensureUploads(mode) {
+  const key = api.base() + '|' + input.hash;
+  let ref = uploadCache.get(key);
+  if (!ref) {
+    const ext = (input.blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
+    ref = await api.uploadImage(input.blob, `ainvil_${input.hash}.${ext}`);
+    uploadCache.set(key, ref);
+  }
+  if (mode === 'inpainting') {
+    const mh = maskAlphaHash();
+    const mkey = key + '|' + mh;
+    let mref = uploadCache.get(mkey);
+    if (!mref) {
+      mref = await api.uploadMask(await serverMaskBlob(), `ainvil_${input.hash}_m${mh}.png`, ref);
+      uploadCache.set(mkey, mref);
+    }
+    ref = mref;
+  }
+  return ref.subfolder ? `${ref.subfolder}/${ref.name}` : ref.name;
+}
+
+/* ---------- generation ---------- */
+function collectParams(mode, seed, image) {
+  const fw = currentFw();
+  return {
+    model: gen.model,
+    prompt: gen.prompt,
+    negative: gen.negative,
+    width: clampInt(gen.width, 16, 16384, 1024),
+    height: clampInt(gen.height, 16, 16384, 1024),
+    batch_size: clampInt(gen.batchSize, 1, 4096, 1),
+    seed,
+    steps: clampInt(gen.steps, 1, 10000, 30),
+    cfg: Number(gen.cfg) || 0,
+    sampler_name: gen.sampler,
+    scheduler: gen.scheduler,
+    denoise: mode === 'txt2img' ? 1 : denoiseValue(),
+    image,
+    crop: !!gen.crop,
+    noise_mask: !!gen.noiseMask,
+    loras: gen.loras.filter((l) => l.name),
+    custom: gen.custom[fw?.name] || {},
+    saveImage: config.serverPreferences.saveImage,
+  };
+}
+
+function seedList(count) {
+  if (gen.randomSeed) return Array.from({ length: count }, randomSeed);
+  const base = Math.max(0, Math.round(Number(gen.seed) || 0));
+  return Array.from({ length: count }, (_, i) => base + i);
+}
+
+async function prepare() {
+  const fw = currentFw();
+  if (!fw) throw new Error('No functional workflow is configured. Add one in the Configuration tab.');
+  const mode = currentMode();
+  if (!fw.workflows?.[mode]?.workflow) throw new Error(`"${fw.name}" has no ${mode} workflow configured.`);
+  await ensureObjectInfo();
+  const image = mode === 'txt2img' ? null : await ensureUploads(mode);
+  return { fw, mode, image };
+}
+
+async function waitForPrompt(id) {
+  for (;;) {
+    if (cancelRequested) throw new Error('Cancelled');
+    const hist = await api.history(id);
+    const entry = hist?.[id];
+    if (entry) {
+      const st = entry.status || {};
+      if (st.status_str === 'error') {
+        const err = (st.messages || []).find((m) => m[0] === 'execution_error')?.[1];
+        throw new Error(err ? `ComfyUI error in node #${err.node_id} (${err.node_type}): ${err.exception_message}` : 'ComfyUI reported an execution error.');
+      }
+      if ((st.messages || []).some((m) => m[0] === 'execution_interrupted')) throw new Error('Interrupted');
+      if (st.completed !== false) return entry.outputs || {};
+    }
+    await sleep(700);
+  }
+}
+
+async function runGenerate() {
+  if (busy) return;
+  cancelRequested = false;
+  setBusy(true);
+  resetGallery();
+  renderGallery();
+  try {
+    setStatus('Preparing…');
+    const { fw, mode, image } = await prepare();
+    const count = clampInt(gen.batchCount, 1, 128, 1);
+    const seeds = seedList(count);
+    activeJobs = [];
+    progress.promptIds.clear();
+    for (let i = 0; i < count; i++) {
+      if (cancelRequested) break;
+      const prompt = buildPrompt(fw, mode, collectParams(mode, seeds[i], image));
+      const r = await api.queuePrompt(prompt);
+      activeJobs.push({ id: r.prompt_id, seed: seeds[i] });
+      progress.promptIds.add(r.prompt_id);
+      setStatus(`Queued ${i + 1} / ${count}`);
+    }
+    for (const [k, job] of activeJobs.entries()) {
+      if (cancelRequested) break;
+      setStatus(`Generating ${k + 1} / ${activeJobs.length} (seed ${job.seed})…`);
+      setProgress(0);
+      const outputs = await waitForPrompt(job.id);
+      job.done = true;
+      const slotMap = fw.workflows[mode].mappings || {};
+      const ids = (slotMap.output || []).map((x) => x.node).filter((id) => outputs[id]);
+      const imgs = (ids.length ? ids : Object.keys(outputs)).flatMap((id) => outputs[id]?.images || []);
+      for (const [bi, im] of imgs.entries()) gallery.items.push(await galleryItem(im, job.seed, bi));
+      renderGallery();
+    }
+    setStatus(cancelRequested ? 'Cancelled.' : `Done — ${gallery.items.length} image(s), ${mode}.`, cancelRequested ? '' : 'ok');
+  } catch (e) {
+    console.error(e);
+    setStatus(errText(e) === 'Cancelled' ? 'Cancelled.' : errText(e), errText(e) === 'Cancelled' ? '' : 'error');
+  } finally {
+    setBusy(false);
+    renderGallery();
+  }
+}
+
+async function cancelGenerate() {
+  cancelRequested = true;
+  const pending = activeJobs.filter((j) => !j.done).map((j) => j.id);
+  try {
+    if (pending.length) await api.deleteQueued(pending);
+    await api.interrupt(progress.running || pending[0]);
+  } catch (e) { toast('Cancel: ' + errText(e), 'error'); }
+}
+
+async function generateWorkflowFile() {
+  if (busy) return;
+  try {
+    setStatus('Building workflow…');
+    const { fw, mode, image } = await prepare();
+    const prompt = buildPrompt(fw, mode, collectParams(mode, seedList(1)[0], image));
+    downloadJSON(prompt, `ainvil-${slug(fw.name)}-${mode}-api.json`);
+    setStatus(`Downloaded the ${mode} workflow (ComfyUI API format).`, 'ok');
+  } catch (e) {
+    setStatus(errText(e), 'error');
+  }
+}
+
+function clearGenerate() {
+  if (busy) return toast('Cancel the running generation first.');
+  const fw = currentFw();
+  gen = genDefaults(fw);
+  try { localStorage.removeItem(LS_GEN); } catch {}
+  clearInputImage();
+  resetGallery();
+  setStatus('');
+  renderGen();
+  renderGallery();
+}
+
+/* ---------- input image & mask ---------- */
+async function setInputImage(blob, name = 'image') {
+  if (!blob.type.startsWith('image/')) return toast('That file is not an image.', 'error');
+  const url = URL.createObjectURL(blob);
+  let img;
+  try { img = await loadImage(url); }
+  catch (e) { URL.revokeObjectURL(url); return toast(errText(e), 'error'); }
+  const keepMask = input.mask && input.mask.width === img.naturalWidth && input.mask.height === img.naturalHeight;
+  if (input.url) URL.revokeObjectURL(input.url);
+  Object.assign(input, {
+    blob, url, img, name, w: img.naturalWidth, h: img.naturalHeight,
+    hash: hash53(new Uint8Array(await blob.arrayBuffer())),
+    mask: keepMask ? input.mask : null,
+  });
+  renderInput();
+}
+function clearInputImage() {
+  if (input.url) URL.revokeObjectURL(input.url);
+  Object.assign(input, { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null });
+  renderInput();
+}
+function renderInput() {
+  const box = $('#inputBox');
+  box.replaceChildren(input.img
+    ? h('img', { src: input.url, alt: input.name, title: `${input.name} · ${input.w}×${input.h}` })
+    : h('span', { class: 'ph' }, 'Drop an image here'));
+  renderMaskBox();
+  renderMode();
+}
+function renderMaskBox() {
+  const box = $('#maskBox');
+  box.classList.toggle('clickable', !!input.img);
+  if (!input.img) {
+    box.replaceChildren(h('span', { class: 'ph' }, 'Load an image, then click here to paint a mask or drop a mask image'));
+    return;
+  }
+  const scale = Math.min(1, 640 / Math.max(input.w, input.h));
+  const c = h('canvas', { width: Math.round(input.w * scale), height: Math.round(input.h * scale) });
+  const ctx = c.getContext('2d');
+  ctx.drawImage(input.img, 0, 0, c.width, c.height);
+  if (input.mask) {
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(input.mask, 0, 0, c.width, c.height);
+    box.replaceChildren(c);
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    ctx.fillRect(0, 0, c.width, c.height);
+    box.replaceChildren(c, h('span', { class: 'ph', style: 'position:absolute;color:#fff' }, 'Click to paint a mask'));
+  }
+}
+
+const MASK_RGB = [255, 40, 90];
+function maskHasContent(c) {
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
+  return false;
+}
+async function loadMaskFile(blob) {
+  if (!input.img) return toast('Load an input image before adding a mask.', 'error');
+  let img;
+  const url = URL.createObjectURL(blob);
+  try { img = await loadImage(url); } catch (e) { return toast(errText(e), 'error'); } finally { URL.revokeObjectURL(url); }
+  const c = h('canvas', { width: input.w, height: input.h });
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, input.w, input.h);
+  const d = ctx.getImageData(0, 0, input.w, input.h);
+  const p = d.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const lum = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
+    const m = Math.round((lum * p[i + 3]) / 255);
+    p[i] = MASK_RGB[0]; p[i + 1] = MASK_RGB[1]; p[i + 2] = MASK_RGB[2]; p[i + 3] = m;
+  }
+  ctx.putImageData(d, 0, 0);
+  input.mask = maskHasContent(c) ? c : null;
+  renderMaskBox();
+  renderMode();
+}
+async function downloadMask() {
+  if (!input.mask) return toast('No mask to download.');
+  const src = input.mask;
+  const c = h('canvas', { width: src.width, height: src.height });
+  const ctx = c.getContext('2d');
+  const sd = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
+  const out = ctx.createImageData(src.width, src.height);
+  for (let i = 0; i < sd.length; i += 4) {
+    const v = sd[i + 3];
+    out.data[i] = out.data[i + 1] = out.data[i + 2] = v;
+    out.data[i + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  downloadBlob(await canvasToBlob(c), (input.name.replace(/\.\w+$/, '') || 'image') + '-mask.png');
+}
+
+/* ---------- mask editor ---------- */
+const me = { work: null, ctx: null, erase: false, undo: [], drawing: false, last: null };
+function openMaskEditor() {
+  if (!input.img) return;
+  const c = h('canvas', { width: input.w, height: input.h });
+  const ctx = c.getContext('2d');
+  if (input.mask) ctx.drawImage(input.mask, 0, 0);
+  me.work = c; me.ctx = ctx; me.undo = []; me.drawing = false;
+  $('#meImg').src = input.url;
+  $('#meWrap').querySelector('canvas')?.remove();
+  $('#meWrap').append(c);
+  c.addEventListener('pointerdown', mePointerDown);
+  c.addEventListener('pointermove', mePointerMove);
+  c.addEventListener('pointerup', mePointerUp);
+  c.addEventListener('pointercancel', mePointerUp);
+  c.addEventListener('pointerleave', () => { $('#meRing').hidden = true; });
+  $('#maskEditor').hidden = false;
+  fitMaskEditor();
+}
+function fitMaskEditor() {
+  if ($('#maskEditor').hidden) return;
+  const st = $('#meStage');
+  const s = Math.min((st.clientWidth - 20) / input.w, (st.clientHeight - 20) / input.h);
+  $('#meWrap').style.width = Math.floor(input.w * s) + 'px';
+  $('#meWrap').style.height = Math.floor(input.h * s) + 'px';
+}
+function mePos(e) {
+  const r = me.work.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * me.work.width / r.width, y: (e.clientY - r.top) * me.work.height / r.height, k: me.work.width / r.width };
+}
+function meStroke(a, b) {
+  const ctx = me.ctx;
+  ctx.globalCompositeOperation = me.erase ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = ctx.fillStyle = `rgb(${MASK_RGB.join(',')})`;
+  ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.lineWidth = Number($('#meSize').value) * b.k;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x + 0.01, b.y);
+  ctx.stroke();
+}
+function mePushUndo() {
+  me.undo.push(me.ctx.getImageData(0, 0, me.work.width, me.work.height));
+  if (me.undo.length > 20) me.undo.shift();
+}
+function mePointerDown(e) {
+  e.preventDefault();
+  try { me.work.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
+  mePushUndo();
+  me.drawing = true;
+  me.last = mePos(e);
+  meStroke(me.last, me.last);
+}
+function mePointerMove(e) {
+  const ring = $('#meRing');
+  const sz = Number($('#meSize').value);
+  ring.hidden = e.pointerType === 'touch';
+  Object.assign(ring.style, { left: e.clientX + 'px', top: e.clientY + 'px', width: sz + 'px', height: sz + 'px' });
+  if (!me.drawing) return;
+  const p = mePos(e);
+  meStroke(me.last, p);
+  me.last = p;
+}
+function mePointerUp() { me.drawing = false; }
+function meSetErase(erase) {
+  me.erase = erase;
+  $('#mePaint').classList.toggle('on', !erase);
+  $('#meErase').classList.toggle('on', erase);
+}
+function meInvert() {
+  mePushUndo();
+  const d = me.ctx.getImageData(0, 0, me.work.width, me.work.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    d.data[i] = MASK_RGB[0]; d.data[i + 1] = MASK_RGB[1]; d.data[i + 2] = MASK_RGB[2];
+    d.data[i + 3] = 255 - d.data[i + 3];
+  }
+  me.ctx.putImageData(d, 0, 0);
+}
+function meFill(clear) {
+  mePushUndo();
+  me.ctx.globalCompositeOperation = 'source-over';
+  me.ctx.clearRect(0, 0, me.work.width, me.work.height);
+  if (!clear) { me.ctx.fillStyle = `rgb(${MASK_RGB.join(',')})`; me.ctx.fillRect(0, 0, me.work.width, me.work.height); }
+}
+function meUndo() { const d = me.undo.pop(); if (d) me.ctx.putImageData(d, 0, 0); }
+function closeMaskEditor(apply) {
+  if (apply) {
+    input.mask = maskHasContent(me.work) ? me.work : null;
+    renderMaskBox();
+    renderMode();
+  }
+  $('#maskEditor').hidden = true;
+  $('#meRing').hidden = true;
+  me.work = null; me.ctx = null; me.undo = [];
+}
+
+/* ---------- layout ---------- */
+const LAYOUTS = {
+  3: [['sec-main', 'sec-params', 'sec-custom'], ['sec-gallery', 'sec-lora'], ['sec-input', 'sec-inparams', 'sec-cads']],
+  2: [['sec-main', 'sec-gallery', 'sec-custom'], ['sec-params', 'sec-input', 'sec-inparams', 'sec-cads', 'sec-lora']],
+  1: [['sec-main', 'sec-gallery', 'sec-input', 'sec-inparams', 'sec-params', 'sec-custom', 'sec-lora', 'sec-cads']],
+};
+let currentCols = 0;
+function layout() {
+  const w = window.innerWidth;
+  const cols = w >= 1400 ? 3 : w >= 900 ? 2 : 1;
+  if (cols === currentCols) return;
+  currentCols = cols;
+  const host = $('#genColumns');
+  const colEls = LAYOUTS[cols].map((ids) => h('div', { class: 'column' }, ids.map((id) => document.getElementById(id))));
+  host.replaceChildren(...colEls);
+}
+
+/* ======================================================================
+   Configuration tab
+   ====================================================================== */
+const openKeys = new Set(['fw:0']);
+
+function cfgDetails(key, summary, ...body) {
+  const d = h('details', { class: 'item collapsible', open: openKeys.has(key) }, h('summary', {}, summary), ...body);
+  d.addEventListener('toggle', (e) => {
+    if (e.target !== d) return;
+    if (d.open) openKeys.add(key); else openKeys.delete(key);
+  });
+  return d;
+}
+
+function configChanged({ generate = true } = {}) {
+  saveConfig();
+  if (generate) { refreshFwSelect(); refreshGenerateOptions(); }
+}
+
+function textField(label, value, onchange, attrs = {}) {
+  return h('label', {}, label, h('input', { type: 'text', value: value ?? '', spellcheck: false, onchange: (e) => onchange(e.target.value), ...attrs }));
+}
+
+function nodeLabel(n) { return `#${n.id} ${n.title}${n.title !== n.type ? ` (${n.type})` : ''}`; }
+
+function targetsEditor(holder, key, nodes, nodeOnly) {
+  const wrap = h('div', { class: 'targets' });
+  const draw = () => {
+    const list = holder[key] || [];
+    wrap.replaceChildren(...list.map((tg, idx) => {
+      const nodeSel = h('select', {
+        onchange: (e) => {
+          tg.node = e.target.value;
+          const nd = nodes.find((n) => n.id === tg.node);
+          if (!nodeOnly && nd && !nd.inputs.some((i) => i.name === tg.input)) tg.input = (nd.inputs.find((i) => !i.linked) || nd.inputs[0])?.name || '';
+          configChanged();
+          draw();
+        },
+      }, h('option', { value: '' }, '— node —'), nodes.map((n) => h('option', { value: n.id }, nodeLabel(n))));
+      if (tg.node && !nodes.some((n) => n.id === tg.node)) nodeSel.append(h('option', { value: tg.node }, `#${tg.node} (not in workflow)`));
+      nodeSel.value = tg.node || '';
+      const del = h('button', { class: 'small danger', title: 'Remove target', onclick: () => { list.splice(idx, 1); configChanged(); draw(); } }, '✕');
+      if (nodeOnly) return h('div', { class: 'target nodeonly' }, nodeSel, del);
+      const nd = nodes.find((n) => n.id === tg.node);
+      const inputs = nd ? nd.inputs : [];
+      const inSel = h('select', { onchange: (e) => { tg.input = e.target.value; configChanged(); } },
+        h('option', { value: '' }, '— input —'),
+        inputs.map((i) => h('option', { value: i.name }, i.name + (i.linked ? ' (link)' : ''))));
+      if (tg.input && !inputs.some((i) => i.name === tg.input)) inSel.append(h('option', { value: tg.input }, `${tg.input} (?)`));
+      inSel.value = tg.input || '';
+      return h('div', { class: 'target' }, nodeSel, inSel, del);
+    }), h('button', {
+      class: 'small',
+      onclick: () => { (holder[key] ??= []).push(nodeOnly ? { node: '' } : { node: '', input: '' }); configChanged(); draw(); },
+    }, '+ target'));
+  };
+  draw();
+  return wrap;
+}
+
+function workflowStatus(wf) {
+  if (!wf) return 'no workflow';
+  try {
+    const n = Object.keys(templateApi(wf)).length;
+    return `${n} nodes · ${isUiWorkflow(wf) ? 'UI format' : 'API format'}`;
+  } catch (e) { return 'invalid: ' + errText(e); }
+}
+
+function workflowControls(holder, wfKey, name, onLoaded) {
+  const err = h('pre', { class: 'errorbox', hidden: true });
+  return h('div', {},
+    h('div', { class: 'actions' },
+      h('span', { class: 'hint' }, workflowStatus(holder[wfKey])),
+      h('button', {
+        class: 'small',
+        onclick: async () => {
+          const f = await pickFile('.json,.png,application/json,image/png');
+          if (!f) return;
+          try {
+            holder[wfKey] = await readWorkflowFile(f);
+            err.hidden = true;
+            onLoaded?.();
+            configChanged();
+            renderConfigLists();
+            toast(`Loaded ${f.name}`, 'ok');
+          } catch (e) { err.textContent = errText(e); err.hidden = false; }
+        },
+      }, holder[wfKey] ? 'Replace workflow…' : 'Load workflow…'),
+      holder[wfKey] && h('button', { class: 'small', onclick: () => downloadJSON(holder[wfKey], `${slug(name)}.json`) }, 'Download'),
+    ),
+    err);
+}
+
+function fwModeEditor(fw, fi, mode) {
+  const slot = (fw.workflows[mode] ??= { workflow: null, mappings: {} });
+  const nodes = describeNodes(slot.workflow);
+  const params = FPARAMS.filter((p) => !p.modes || p.modes.includes(mode));
+  const mapCount = Object.values(slot.mappings).filter((l) => l?.some((x) => x.node)).length;
+  return cfgDetails(`fw:${fi}:${mode}`,
+    h('span', {}, mode, h('span', { class: 'sub' }, `${workflowStatus(slot.workflow)} · ${mapCount} mapped`)),
+    workflowControls(slot, 'workflow', `${fw.name}-${mode}`, () => {
+      if (!Object.values(slot.mappings).some((l) => l?.length)) slot.mappings = autoDetectMappings(slot.workflow, mode);
+    }),
+    slot.workflow && h('div', { class: 'actions' },
+      h('button', {
+        class: 'small',
+        onclick: () => {
+          if (Object.values(slot.mappings).some((l) => l?.length) && !confirm('Replace the current mappings with auto-detected ones?')) return;
+          try { slot.mappings = autoDetectMappings(slot.workflow, mode); configChanged(); renderConfigLists(); toast('Mappings detected', 'ok'); }
+          catch (e) { toast(errText(e), 'error'); }
+        },
+      }, 'Auto-detect mappings'),
+      !OI && h('span', { class: 'hint' }, 'Connect to the server for full input lists.')),
+    slot.workflow && h('table', { class: 'map' }, h('tbody', {}, params.map((p) => h('tr', {},
+      h('td', {}, p.label, p.hint && h('span', { class: 'hint' }, p.hint)),
+      h('td', {}, targetsEditor(slot.mappings, p.key, nodes, p.nodeOnly)))))));
+}
+
+function paramEditor(p, onRemove, mappingsUi) {
+  const optField = h('label', { hidden: p.type !== 'combo' }, 'Options (comma separated; empty = from server)',
+    h('input', { type: 'text', value: (p.options || []).join(', '), onchange: (e) => { p.options = e.target.value.split(',').map((s) => s.trim()).filter(Boolean); configChanged(); } }));
+  const numFields = ['min', 'max', 'step'].map((k) => h('label', { hidden: !['int', 'float'].includes(p.type) }, k,
+    h('input', { type: 'number', value: p[k] ?? '', onchange: (e) => { if (e.target.value === '') delete p[k]; else p[k] = Number(e.target.value); configChanged(); } })));
+  return h('div', { class: 'param-card' },
+    h('div', { class: 'fields', style: 'margin-top:0' },
+      textField('Name', p.name, (v) => { p.name = v; configChanged(); }),
+      h('label', {}, 'Type', h('select', {
+        onchange: (e) => {
+          p.type = e.target.value;
+          optField.hidden = p.type !== 'combo';
+          numFields.forEach((f) => { f.hidden = !['int', 'float'].includes(p.type); });
+          configChanged();
+        },
+      }, PARAM_TYPES.map((ty) => h('option', { value: ty, selected: ty === p.type }, ty)))),
+      textField('Default', p.default ?? '', (v) => {
+        p.default = p.type === 'int' || p.type === 'float' ? (v === '' ? null : Number(v)) : p.type === 'boolean' ? v === 'true' : v;
+        configChanged();
+      }),
+      optField, ...numFields),
+    mappingsUi,
+    h('div', { class: 'actions' }, h('button', { class: 'small danger', onclick: onRemove }, 'Remove parameter')));
+}
+
+function fwEditor(fw, fi) {
+  const list = config.functionalWorkflows;
+  const custom = h('div', {},
+    fw.customParameters.map((p, pi) => paramEditor(p,
+      () => { fw.customParameters.splice(pi, 1); configChanged(); renderConfigLists(); },
+      h('table', { class: 'map' }, h('tbody', {}, MODES.map((mode) => h('tr', {},
+        h('td', {}, mode),
+        h('td', {}, fw.workflows[mode]?.workflow
+          ? targetsEditor((p.mappings ??= {}), mode, describeNodes(fw.workflows[mode].workflow), false)
+          : h('span', { class: 'hint' }, 'no workflow')))))))),
+    h('div', { class: 'actions' }, h('button', {
+      class: 'small',
+      onclick: () => { fw.customParameters.push({ name: 'New parameter', type: 'string', default: '', options: [], mappings: {} }); openKeys.add(`fw:${fi}:custom`); configChanged(); renderConfigLists(); },
+    }, '+ Add custom parameter')));
+
+  return cfgDetails(`fw:${fi}`,
+    h('span', {}, fw.name || '(unnamed)', h('span', { class: 'sub' }, MODES.filter((m) => fw.workflows[m]?.workflow).join(' · ') || 'no workflows')),
+    h('div', { class: 'fields' },
+      textField('Name', fw.name, (v) => {
+        const old = fw.name;
+        fw.name = v.trim() || 'Unnamed';
+        if (gen.fwName === old) gen.fwName = fw.name;
+        configChanged();
+        renderConfigLists();
+      }),
+      textField('Model filter (regex, case-insensitive)', fw.modelFilter, (v) => { fw.modelFilter = v; configChanged(); }),
+      textField('LoRA filter (regex, case-insensitive)', fw.loraFilter, (v) => { fw.loraFilter = v; configChanged(); })),
+    h('div', { class: 'actions' },
+      h('button', { class: 'small', onclick: () => downloadJSON({ version: CONFIG_VERSION, type: 'functionalWorkflow', workflow: fw }, `ainvil-functional-${slug(fw.name)}.json`) }, 'Export'),
+      h('button', { class: 'small', onclick: () => { const c = clone(fw); c.name += ' copy'; list.splice(fi + 1, 0, c); configChanged(); renderConfigLists(); } }, 'Duplicate'),
+      fi > 0 && h('button', { class: 'small', onclick: () => { [list[fi - 1], list[fi]] = [list[fi], list[fi - 1]]; configChanged(); renderConfigLists(); } }, 'Move up'),
+      h('button', { class: 'small danger', onclick: () => { if (confirm(`Delete functional workflow "${fw.name}"?`)) { list.splice(fi, 1); configChanged(); renderConfigLists(); } } }, 'Delete')),
+    h('h3', {}, 'ComfyUI workflows and mappings'),
+    MODES.map((mode) => fwModeEditor(fw, fi, mode)),
+    cfgDetails(`fw:${fi}:custom`, h('span', {}, 'Custom parameters', h('span', { class: 'sub' }, String(fw.customParameters.length))), custom));
+}
+
+function cwEditor(cw, ci) {
+  const list = config.customWorkflows;
+  const nodes = describeNodes(cw.workflow);
+  return cfgDetails(`cw:${ci}`,
+    h('span', {}, cw.name || '(unnamed)', h('span', { class: 'sub' }, workflowStatus(cw.workflow))),
+    h('div', { class: 'fields' }, textField('Name', cw.name, (v) => { cw.name = v.trim() || 'Unnamed'; configChanged({ generate: false }); renderConfigLists(); })),
+    workflowControls(cw, 'workflow', cw.name),
+    h('div', { class: 'actions' },
+      h('button', { class: 'small', onclick: () => downloadJSON({ version: CONFIG_VERSION, type: 'customWorkflow', workflow: cw }, `ainvil-custom-${slug(cw.name)}.json`) }, 'Export'),
+      h('button', { class: 'small', onclick: () => { const c = clone(cw); c.name += ' copy'; list.splice(ci + 1, 0, c); configChanged({ generate: false }); renderConfigLists(); } }, 'Duplicate'),
+      h('button', { class: 'small danger', onclick: () => { if (confirm(`Delete custom workflow "${cw.name}"?`)) { list.splice(ci, 1); configChanged({ generate: false }); renderConfigLists(); } } }, 'Delete')),
+    h('h3', {}, 'Parameters'),
+    cw.parameters.map((p, pi) => paramEditor(p,
+      () => { cw.parameters.splice(pi, 1); configChanged({ generate: false }); renderConfigLists(); },
+      cw.workflow ? h('div', { style: 'margin-top:8px' }, h('span', { class: 'hint' }, 'Mapping'), targetsEditor(p, 'mappings', nodes, false)) : h('p', { class: 'hint' }, 'Load a workflow to map this parameter.'))),
+    h('div', { class: 'actions' }, h('button', {
+      class: 'small',
+      onclick: () => { cw.parameters.push({ name: 'New parameter', type: 'string', default: '', options: [], mappings: [] }); configChanged({ generate: false }); renderConfigLists(); },
+    }, '+ Add parameter')));
+}
+
+function renderConfigLists() {
+  const fwl = $('#fwList');
+  fwl.replaceChildren(...config.functionalWorkflows.map(fwEditor));
+  if (!config.functionalWorkflows.length) fwl.append(h('p', { class: 'hint' }, 'No functional workflows configured.'));
+  const cwl = $('#cwList');
+  cwl.replaceChildren(...config.customWorkflows.map(cwEditor));
+  if (!config.customWorkflows.length) cwl.append(h('p', { class: 'hint' }, 'No custom workflows configured.'));
+}
+
+function renderConfig() {
+  $('#apiUrl').value = config.connection.apiUrl;
+  $('#cfgCads').checked = config.serverFeatures.cads;
+  $('#cfgSaveImage').checked = config.serverPreferences.saveImage;
+  renderConfigLists();
+}
+
+function uniqueName(name, list) {
+  let n = name, i = 2;
+  while (list.some((x) => x.name === n)) n = `${name} (${i++})`;
+  return n;
+}
+
+async function importItem(kind) {
+  const errBox = kind === 'functionalWorkflow' ? $('#fwImportError') : $('#cwImportError');
+  const f = await pickFile('.json,application/json');
+  if (!f) return;
+  try {
+    let obj;
+    try { obj = JSON.parse(await readText(f)); } catch (e) { throw new Error(`${f.name}: invalid JSON (${errText(e)})`); }
+    checkVersion(obj, f.name);
+    if (obj.type && obj.type !== kind) throw new Error(`${f.name}: this file is a "${obj.type}" export, expected "${kind}".`);
+    if (!isObj(obj.workflow)) throw new Error(`${f.name}: missing "workflow" object.`);
+    if (kind === 'functionalWorkflow') {
+      const fw = normalizeFw(obj.workflow, f.name);
+      fw.name = uniqueName(fw.name, config.functionalWorkflows);
+      config.functionalWorkflows.push(fw);
+      openKeys.add(`fw:${config.functionalWorkflows.length - 1}`);
+      configChanged();
+    } else {
+      const cw = normalizeCw(obj.workflow, f.name);
+      cw.name = uniqueName(cw.name, config.customWorkflows);
+      config.customWorkflows.push(cw);
+      configChanged({ generate: false });
+    }
+    errBox.hidden = true;
+    renderConfigLists();
+    toast(`Imported ${f.name}`, 'ok');
+  } catch (e) {
+    errBox.textContent = `Import failed.\n\n${errText(e)}${e.stack ? '\n\n' + e.stack : ''}`;
+    errBox.hidden = false;
+  }
+}
+
+let pendingImport = null;
+async function stageImport(file) {
+  pendingImport = file;
+  $('#importFileName').textContent = file ? `Selected: ${file.name} (${file.size.toLocaleString()} bytes)` : '';
+  $('#btnImport').disabled = !file;
+  $('#importError').hidden = true;
+}
+async function doImport() {
+  const box = $('#importError');
+  if (!pendingImport) return;
+  try {
+    let obj;
+    const text = await readText(pendingImport);
+    try { obj = JSON.parse(text); } catch (e) { throw new Error(`Invalid JSON in ${pendingImport.name}: ${errText(e)}`); }
+    if (isUiWorkflow(obj) || isApiWorkflow(obj)) throw new Error('This is a ComfyUI workflow, not an Ainvil configuration. Load it into a functional or custom workflow below instead.');
+    if (obj?.type === 'functionalWorkflow' || obj?.type === 'customWorkflow') throw new Error('This is a single-workflow export; import it from the Functional/Custom Workflows section instead.');
+    const c = normalizeConfig(obj);
+    config = c;
+    saveConfig();
+    box.hidden = true;
+    stageImport(null);
+    renderConfig();
+    if (!config.functionalWorkflows.some((f) => f.name === gen.fwName)) gen.fwName = config.functionalWorkflows[0]?.name || '';
+    renderGen();
+    toast('Configuration imported', 'ok');
+    connect({ quiet: true });
+  } catch (e) {
+    box.textContent = `Import failed — the current configuration was not changed.\n\n${errText(e)}${e.stack ? '\n\nStack:\n' + e.stack : ''}`;
+    box.hidden = false;
+  }
+}
+
+async function testConnection() {
+  const out = $('#connResult');
+  out.className = 'result';
+  out.textContent = 'Testing…';
+  try {
+    const stats = await api.systemStats();
+    const dev = stats?.devices?.[0];
+    out.className = 'result ok';
+    out.textContent = `Connected to ComfyUI ${stats?.system?.comfyui_version || '(unknown version)'}` +
+      (dev ? `\nDevice: ${dev.name} · VRAM ${(dev.vram_total / 2 ** 30).toFixed(1)} GiB` : '');
+    connect({ quiet: true });
+  } catch (e) {
+    out.className = 'result error';
+    out.textContent = errText(e);
+  }
+}
+
+async function autoConfigure() {
+  const out = $('#connResult');
+  out.className = 'result';
+  out.textContent = 'Interrogating server…';
+  try {
+    await connect();
+    const cads = !!OI?.CADS || Object.values(OI || {}).some((n) => /comfyui-cads/i.test(n.python_module || ''));
+    config.serverFeatures.cads = cads;
+    configChanged();
+    renderConfig();
+    out.className = 'result ok';
+    out.textContent = `Auto-configured from ${Object.keys(OI).length} node types.\nCADS: ${cads ? 'available' : 'not installed'}.`;
+  } catch (e) {
+    out.className = 'result error';
+    out.textContent = errText(e);
+  }
+}
+
+/* ======================================================================
+   Wiring
+   ====================================================================== */
+function bindTabs() {
+  const show = (name) => {
+    $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    $$('.tabpanel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
+    try { localStorage.setItem('ainvil.tab', name); } catch {}
+  };
+  $$('.tab').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
+  $('#connStatus').addEventListener('click', () => show('config'));
+  let last = null;
+  try { last = localStorage.getItem('ainvil.tab'); } catch {}
+  if (last && $(`#tab-${last}`)) show(last);
+}
+
+function bindGenerate() {
+  const num = (id, key, after) => $('#' + id).addEventListener('input', (e) => {
+    gen[key] = e.target.value === '' ? '' : Number(e.target.value);
+    after?.();
+    saveGenSoon();
+  });
+  $('#fwSelect').addEventListener('change', (e) => {
+    gen.fwName = e.target.value;
+    const d = genDefaults(currentFw());
+    Object.assign(gen, { model: d.model, steps: d.steps, cfg: d.cfg, sampler: d.sampler, scheduler: d.scheduler });
+    renderGen();
+    saveGenSoon();
+  });
+  $('#modelSelect').addEventListener('change', (e) => { gen.model = e.target.value; saveGenSoon(); });
+  $('#prompt').addEventListener('input', (e) => { gen.prompt = e.target.value; saveGenSoon(); });
+  $('#negative').addEventListener('input', (e) => { gen.negative = e.target.value; saveGenSoon(); });
+  num('batchCount', 'batchCount');
+  $('#batchCount').addEventListener('change', (e) => { gen.batchCount = clampInt(e.target.value, 1, 128, 1); e.target.value = gen.batchCount; saveGenSoon(); });
+  num('width', 'width', () => { gen.resCustom = false; renderRes(); });
+  num('height', 'height', () => { gen.resCustom = false; renderRes(); });
+  num('seed', 'seed');
+  $('#randomSeed').addEventListener('change', (e) => { gen.randomSeed = e.target.checked; saveGenSoon(); });
+  num('batchSize', 'batchSize');
+  $('#steps').addEventListener('input', (e) => {
+    const old = clampInt(gen.steps, 1, 10000, 30);
+    if (e.target.value === '') return;
+    const nu = clampInt(e.target.value, 1, 10000, old);
+    gen.denoiseStep = Math.round((clampInt(gen.denoiseStep, 0, old) / old) * nu);
+    gen.steps = nu;
+    renderDenoise();
+    saveGenSoon();
+  });
+  num('cfg', 'cfg');
+  $('#sampler').addEventListener('change', (e) => { gen.sampler = e.target.value; saveGenSoon(); });
+  $('#scheduler').addEventListener('change', (e) => { gen.scheduler = e.target.value; saveGenSoon(); });
+
+  $$('#resProfiles button').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.custom) { gen.resCustom = true; renderRes(); saveGenSoon(); return; }
+    const m = gen.resCustom ? null : matchRes(gen.width, gen.height);
+    setRes(b.dataset.profile, m?.ratio || 'square');
+  }));
+  $$('#resRatios button').forEach((b) => b.addEventListener('click', () => {
+    const m = gen.resCustom ? null : matchRes(gen.width, gen.height);
+    setRes(m?.profile || '1024', b.dataset.ratio);
+  }));
+
+  const setStep = (v) => { gen.denoiseStep = clampInt(v, 0, clampInt(gen.steps, 1, 10000)); renderDenoise(); saveGenSoon(); };
+  $('#denoiseSlider').addEventListener('input', (e) => setStep(e.target.value));
+  $('#denoiseStep').addEventListener('input', (e) => { if (e.target.value !== '') setStep(e.target.value); });
+  $('#denoiseValue').addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    if (e.target.value === '' || !Number.isFinite(v)) return;
+    setStep(Math.round((1 - Math.min(1, Math.max(0, v))) * clampInt(gen.steps, 1, 10000)));
+  });
+  $('#denoiseValue').addEventListener('change', () => { $('#denoiseValue').value = denoiseValue().toFixed(2); });
+  $('#crop').addEventListener('change', (e) => { gen.crop = e.target.checked; saveGenSoon(); });
+  $('#noiseMask').addEventListener('change', (e) => { gen.noiseMask = e.target.checked; saveGenSoon(); });
+
+  $('#btnGenerate').addEventListener('click', runGenerate);
+  $('#btnCancel').addEventListener('click', cancelGenerate);
+  $('#btnClear').addEventListener('click', clearGenerate);
+  $('#btnWorkflow').addEventListener('click', generateWorkflowFile);
+  $('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runGenerate(); } });
+
+  $('#btnAddLora').addEventListener('click', () => {
+    const fw = currentFw();
+    const opts = filterList(optionsFor(fw, 'lora') || [], fw?.loraFilter);
+    gen.loras.push({ name: opts[0] || '', weight: 1 });
+    renderLoras();
+    saveGenSoon();
+  });
+
+  // gallery
+  $('#btnDlSel').addEventListener('click', downloadSelected);
+  $('#btnDlAll').addEventListener('click', downloadAll);
+  $('#btnUseSeed').addEventListener('click', () => {
+    const it = gallery.items[gallery.sel];
+    if (!it) return;
+    gen.seed = it.seed; gen.randomSeed = false;
+    $('#seed').value = it.seed; $('#randomSeed').checked = false;
+    saveGenSoon();
+    toast(`Seed set to ${it.seed}`);
+  });
+  $('#btnToInput').addEventListener('click', async () => {
+    const it = gallery.items[gallery.sel];
+    if (!it) return;
+    try { await setInputImage(await itemBlob(it), it.filename); }
+    catch (e) { toast('Could not load the image: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); }
+  });
+  $('#viewerClose').addEventListener('click', closeViewer);
+  $('#viewerPrev').addEventListener('click', () => stepViewer(-1));
+  $('#viewerNext').addEventListener('click', () => stepViewer(1));
+  $('#viewer').addEventListener('click', (e) => { if (e.target.id === 'viewer') closeViewer(); });
+
+  // input image
+  makeDropZone($('#inputBox'), (f) => setInputImage(f, f.name));
+  $('#inputBox').addEventListener('click', () => { if (!input.img) $('#fileImage').click(); });
+  $('#btnPickImage').addEventListener('click', () => $('#fileImage').click());
+  $('#fileImage').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) setInputImage(f, f.name); e.target.value = ''; });
+  $('#btnClearImage').addEventListener('click', clearInputImage);
+  makeDropZone($('#maskBox'), loadMaskFile);
+  $('#maskBox').addEventListener('click', openMaskEditor);
+  $('#btnUpMask').addEventListener('click', () => { if (!input.img) return toast('Load an input image first.'); $('#fileMask').click(); });
+  $('#fileMask').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadMaskFile(f); e.target.value = ''; });
+  $('#btnDlMask').addEventListener('click', downloadMask);
+  $('#btnClearMask').addEventListener('click', () => { input.mask = null; renderMaskBox(); renderMode(); });
+  document.addEventListener('paste', (e) => {
+    if (!$('#tab-generate').classList.contains('active')) return;
+    if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) return;
+    const f = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith('image/'));
+    if (f) setInputImage(f, f.name || 'pasted.png');
+  });
+
+  // mask editor
+  $('#mePaint').addEventListener('click', () => meSetErase(false));
+  $('#meErase').addEventListener('click', () => meSetErase(true));
+  $('#meUndo').addEventListener('click', meUndo);
+  $('#meInvert').addEventListener('click', meInvert);
+  $('#meFill').addEventListener('click', () => meFill(false));
+  $('#meClear').addEventListener('click', () => meFill(true));
+  $('#meCancel').addEventListener('click', () => closeMaskEditor(false));
+  $('#meDone').addEventListener('click', () => closeMaskEditor(true));
+
+  document.addEventListener('keydown', (e) => {
+    if (!$('#maskEditor').hidden) {
+      if (e.key === 'Escape') closeMaskEditor(false);
+      else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); meUndo(); }
+      else if (e.key === 'x') meSetErase(!me.erase);
+      else if (e.key === '[' || e.key === ']') { const s = $('#meSize'); s.value = Number(s.value) + (e.key === ']' ? 5 : -5); }
+      return;
+    }
+    if (!$('#viewer').hidden) {
+      if (e.key === 'Escape') closeViewer();
+      else if (e.key === 'ArrowLeft') stepViewer(-1);
+      else if (e.key === 'ArrowRight') stepViewer(1);
+    }
+  });
+  window.addEventListener('resize', () => { layout(); fitMaskEditor(); });
+}
+
+function bindConfig() {
+  $('#btnSaveUrl').addEventListener('click', () => {
+    config.connection.apiUrl = $('#apiUrl').value.trim() || DEFAULT_API;
+    saveConfig();
+    OI = null;
+    testConnection();
+  });
+  $('#apiUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnSaveUrl').click(); });
+  $('#btnTestConn').addEventListener('click', () => {
+    config.connection.apiUrl = $('#apiUrl').value.trim() || DEFAULT_API;
+    saveConfig();
+    testConnection();
+  });
+  $('#btnAutoConf').addEventListener('click', autoConfigure);
+  $('#btnUseOrigin').hidden = !/^https?:$/.test(location.protocol);
+  $('#btnUseOrigin').addEventListener('click', () => { $('#apiUrl').value = location.origin + '/'; $('#btnSaveUrl').click(); });
+
+  $('#btnExportAll').addEventListener('click', () => downloadJSON(config, 'ainvil-config.json'));
+  $('#btnResetConfig').addEventListener('click', () => {
+    if (!confirm('Replace the whole configuration with the built-in defaults?')) return;
+    const url = config.connection.apiUrl;
+    config = defaultConfig();
+    config.connection.apiUrl = url;
+    saveConfig();
+    renderConfig();
+    renderGen();
+    toast('Configuration reset (connection kept)', 'ok');
+  });
+  makeDropZone($('#importBox'), stageImport);
+  $('#btnPickImport').addEventListener('click', () => $('#fileImport').click());
+  $('#fileImport').addEventListener('change', (e) => { stageImport(e.target.files[0] || null); e.target.value = ''; });
+  $('#btnImport').addEventListener('click', doImport);
+
+  $('#cfgCads').addEventListener('change', (e) => { config.serverFeatures.cads = e.target.checked; configChanged(); });
+  $('#cfgSaveImage').addEventListener('change', (e) => { config.serverPreferences.saveImage = e.target.checked; configChanged({ generate: false }); });
+
+  $('#btnImportFw').addEventListener('click', () => importItem('functionalWorkflow'));
+  $('#btnImportCw').addEventListener('click', () => importItem('customWorkflow'));
+  $('#btnAddFw').addEventListener('click', () => {
+    config.functionalWorkflows.push(normalizeFw({ name: uniqueName('New workflow', config.functionalWorkflows) }));
+    openKeys.add(`fw:${config.functionalWorkflows.length - 1}`);
+    configChanged();
+    renderConfigLists();
+  });
+  $('#btnAddCw').addEventListener('click', () => {
+    config.customWorkflows.push(normalizeCw({ name: uniqueName('New custom workflow', config.customWorkflows) }));
+    openKeys.add(`cw:${config.customWorkflows.length - 1}`);
+    configChanged({ generate: false });
+    renderConfigLists();
+  });
+}
+
+function init() {
+  config = loadConfig();
+  gen = loadGenState();
+  layout();
+  bindTabs();
+  bindGenerate();
+  bindConfig();
+  renderConfig();
+  renderGen();
+  renderInput();
+  renderGallery();
+  connect({ quiet: true });
+}
+
+init();
+</script>
+</body>
+</html>
