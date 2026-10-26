@@ -181,6 +181,8 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 .hist-row .actions { margin-top: 6px; gap: 4px; }
 .hist-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; align-content: start; }
 .hist-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; background: var(--input); display: block; }
+.hist-thumbs img.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+.hist-row.pinned { border-color: var(--accent); }
 .hist-thumbs img:only-child, .hist-thumbs .placeholder { grid-column: 1 / -1; }
 .hist-meta { font-size: 12px; color: var(--muted); word-break: break-word; }
 .hist-meta b { color: var(--fg); }
@@ -324,6 +326,7 @@ table.map td:first-child .hint { display: block; }
         <button id="btnToInput" title="Load this image as the input image">Use as Input</button>
         <button id="btnToExtras" title="Add this image to the current Extras workflow's input images">Send to Extras</button>
         <button id="btnHistory" title="Show the recent prompts the server has run, from any client">History…</button>
+        <button id="btnStash" title="Show the images you've put in the Image Stash (kept in this browser)">Stash…</button>
         <button id="btnClearGallery" title="Remove all images from the Output Gallery (the files stay on the server)">Clear</button>
       </div>
     </section>
@@ -553,6 +556,22 @@ table.map td:first-child .hint { display: block; }
     </div>
     <div class="hint">Recent prompts from every client of this ComfyUI server, newest first. The server keeps them in memory, so they're gone after a restart.</div>
     <div class="hist-list" id="histList"></div>
+  </div>
+</div>
+
+<!-- Image stash (also before the viewer) -->
+<div id="stashDlg" class="overlay" hidden>
+  <div class="dialog">
+    <div class="dialog-head">
+      <h2>Image Stash</h2>
+      <span class="hint" id="stashInfo"></span>
+      <span class="spacer"></span>
+      <button id="stashClear" title="Remove all images except the pinned ones">Clear</button>
+      <button id="stashClearAll" class="danger" title="Remove all images, including the pinned ones">Clear All</button>
+      <button id="stashClose" title="Close (Esc)">×</button>
+    </div>
+    <div class="hint">Images you've stashed, newest first. They're kept in this browser, not on the server, until you remove them. Clear keeps the pinned ones.</div>
+    <div class="hist-list" id="stashList"></div>
   </div>
 </div>
 
@@ -2902,7 +2921,8 @@ function historyEntry(id, e) {
 
 function historyRow(en) {
   const items = en.images.map((im) => ({ ...im, url: api.viewUrl(im), src: api.viewUrl(im), seed: en.seed, blob: null }));
-  const g = { items, sel: 0, render() {} };
+  // The last image viewed is the one Use as Input takes; it's highlighted when there are several.
+  const g = { items, sel: 0, render: () => thumbs.forEach((t, i) => t.classList.toggle('sel', items.length > 1 && i === g.sel)) };
   const thumbs = items.map((it, i) => {
     // Small webp previews from /view; from file:// Firefox blocks the direct load, so fetch those as blobs.
     const img = h('img', { src: it.url + '&preview=webp;60', loading: 'lazy', alt: it.filename, title: it.filename });
@@ -2919,6 +2939,7 @@ function historyRow(en) {
     };
     return img;
   });
+  g.render();
   const wf = en.match ? `${en.match.fw.name} · ${en.match.mode}` : 'other workflow';
   return h('div', { class: 'hist-row' },
     h('div', { class: 'hist-thumbs' }, thumbs.length ? thumbs : h('div', { class: 'placeholder' }, 'No images')),
@@ -2934,6 +2955,11 @@ function historyRow(en) {
       h('div', { class: 'hist-meta' }, [en.seed != null && `seed ${en.seed}`, en.model, `${items.length} image(s)`].filter(Boolean).join(' · ')),
       h('div', { class: 'actions' },
         h('button', { class: 'small', disabled: !items.length, title: 'Add these images to the Output Gallery', onclick: () => historyToGallery(en) }, 'Add to Gallery'),
+        h('button', { class: 'small', disabled: !items.length, title: 'Add these images to the Image Stash', onclick: () => historyToStash(en, items) }, 'Add to Stash'),
+        h('button', { class: 'small', disabled: !items.length, title: items.length > 1 ? 'Load the highlighted image (the last one viewed) as the input image' : 'Load this image as the input image',
+          onclick: async () => { if (await itemToInput(items[g.sel])) closeHistory(); } }, 'Use as Input'),
+        h('button', { class: 'small', disabled: !items.length, title: items.length > 1 ? 'Download these images as a ZIP file' : 'Download this image',
+          onclick: () => downloadAll(g, `ainvil-history-${en.number}`) }, 'Download'),
         h('button', { class: 'small', disabled: !en.match, title: en.match ? 'Load this prompt\'s settings into the Generate form' : 'Doesn\'t match a configured functional workflow',
           onclick: () => {
             if (busy) return toast('Cancel the running generation first.');
@@ -2951,6 +2977,158 @@ async function historyToGallery(en) {
   gallery.sel = first;
   renderGallery();
   toast(`Added ${en.images.length} image(s) from #${en.number} to the Output Gallery`);
+}
+
+async function historyToStash(en, items) {
+  try {
+    // Last first, so the batch reads in order from the top.
+    for (const [bi, it] of [...items.entries()].reverse()) {
+      await stashAdd(await itemBlob(it), { filename: it.filename, seed: en.seed, batchIndex: bi, number: en.number, time: en.time, text: en.text, model: en.model, a: en.a });
+    }
+  } catch (e) { return toast('Could not stash the images: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); }
+  toast(`Added ${items.length} image(s) from #${en.number} to the Image Stash`);
+}
+
+// Loads a gallery-like item (Output Gallery, history, stash) as the Generate input image.
+async function itemToInput(it) {
+  try { await setInputImage(await itemBlob(it), it.filename); return true; }
+  catch (e) { toast('Could not load the image: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); return false; }
+}
+
+/* ---------- image stash ---------- */
+// A client-side list of images, kept in IndexedDB so it survives a reload. The id is the content hash,
+// so stashing an image again just moves it to the top. Records:
+// {id, blob, filename, added, pinned, seed, batchIndex, and from the history entry: number, time, text, model, a}.
+// In memory each item also has a blob URL as url/src, so it works as a viewer/download list.
+const stash = { items: [], sel: 0, render() {}, db: null, loaded: null, warned: false };
+
+function stashDb() {
+  return stash.db ??= new Promise((resolve, reject) => {
+    const r = indexedDB.open('ainvil-stash', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('images', { keyPath: 'id' });
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+// Runs fn(store) in a write transaction. Without IndexedDB (e.g. blocked storage) the stash still
+// works, but only until the page closes.
+async function stashTx(fn) {
+  try {
+    const db = await stashDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('images', 'readwrite');
+      const req = fn(tx.objectStore('images'));
+      tx.oncomplete = () => resolve(req?.result);
+      tx.onerror = tx.onabort = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.warn('Image stash storage failed', e);
+    if (!stash.warned) toast('The Image Stash can\'t be saved in this browser, so it only lasts until the page is closed:\n' + errText(e), 'error');
+    stash.warned = true;
+  }
+}
+function stashItem(rec) {
+  const url = URL.createObjectURL(rec.blob);
+  return { ...rec, url, src: url };
+}
+function stashPut(it) {
+  const { url, src, ...rec } = it;
+  return stashTx((st) => st.put(rec));
+}
+function loadStash() {
+  return stash.loaded ??= stashTx((st) => st.getAll()).then((recs) => {
+    stash.items = (recs || []).map(stashItem).sort((x, y) => y.added - x.added);
+  });
+}
+async function stashAdd(blob, meta) {
+  await loadStash();
+  const id = hash53(new Uint8Array(await blob.arrayBuffer()));
+  const old = stash.items.find((x) => x.id === id);
+  if (old) stashDrop([old]);
+  // Strictly increasing, so images added in the same millisecond keep their order.
+  const it = stashItem({ ...meta, id, blob, pinned: !!old?.pinned, added: Math.max(Date.now(), (stash.items[0]?.added ?? 0) + 1) });
+  stash.items.unshift(it);
+  await stashPut(it);
+  renderStash();
+}
+function stashDrop(list) {
+  for (const it of list) URL.revokeObjectURL(it.src);
+  stash.items = stash.items.filter((x) => !list.includes(x));
+}
+async function stashRemove(list) {
+  stashDrop(list);
+  renderStash();
+  await stashTx((st) => { for (const it of list) st.delete(it.id); });
+}
+async function stashPin(it) {
+  it.pinned = !it.pinned;
+  renderStash();
+  await stashPut(it);
+}
+async function clearStash(all) {
+  await loadStash();
+  await stashRemove(stash.items.filter((x) => all || !x.pinned));
+}
+
+async function openStash() {
+  $('#stashDlg').hidden = false;
+  $('#stashList').replaceChildren(h('div', { class: 'placeholder' }, 'Loading…'));
+  try { await ensureObjectInfo(); } catch { /* entries just won't match a workflow */ }
+  await loadStash();
+  renderStash();
+}
+function closeStash() {
+  $('#stashDlg').hidden = true;
+  $('#stashList').replaceChildren();
+}
+function renderStash() {
+  if ($('#stashDlg').hidden) return;
+  const pinned = stash.items.filter((x) => x.pinned).length;
+  const mb = stash.items.reduce((n, x) => n + x.blob.size, 0) / 2 ** 20;
+  $('#stashInfo').textContent = stash.items.length ? `${stash.items.length} image(s)${pinned ? `, ${pinned} pinned` : ''} · ${mb.toFixed(1)} MB` : '';
+  $('#stashClear').disabled = pinned === stash.items.length;
+  $('#stashClearAll').disabled = !stash.items.length;
+  $('#stashList').replaceChildren(...(stash.items.length ? stash.items.map(stashRow)
+    : [h('div', { class: 'placeholder' }, 'The stash is empty. Use Add to Stash in the server History to put images here.')]));
+}
+function stashRow(it, i) {
+  let match = null;
+  try { if (it.a) match = matchPrompt(it.a); } catch { /* shown as another workflow */ }
+  const wf = it.a && (match ? `${match.fw.name} · ${match.mode}` : 'other workflow');
+  return h('div', { class: 'hist-row' + (it.pinned ? ' pinned' : '') },
+    h('div', { class: 'hist-thumbs' }, h('img', { src: it.src, alt: it.filename, title: it.filename, onclick: () => openViewer(stash, i) })),
+    h('div', {},
+      h('div', { class: 'hist-meta' },
+        h('b', {}, it.filename),
+        it.number ? ` · from #${it.number}` : '',
+        it.time ? ` · ${new Date(it.time).toLocaleString()}` : '',
+        wf ? ` · ${wf}` : ''),
+      it.text && h('div', { class: 'hist-prompt', title: it.text }, it.text),
+      h('div', { class: 'hist-meta' }, [it.seed != null && `seed ${it.seed}`, it.batchIndex && `batch #${it.batchIndex}`, it.model,
+        `stashed ${new Date(it.added).toLocaleString()}`].filter(Boolean).join(' · ')),
+      h('div', { class: 'actions' },
+        h('button', { class: 'small toggle' + (it.pinned ? ' on' : ''), title: it.pinned ? 'Pinned: Clear keeps this image. Click to unpin.' : 'Pin this image so Clear keeps it', onclick: () => stashPin(it) }, it.pinned ? 'Pinned' : 'Pin'),
+        h('button', { class: 'small', title: 'Load this image as the input image', onclick: async () => { if (await itemToInput(it)) closeStash(); } }, 'Use as Input'),
+        h('button', { class: 'small', title: 'Download this image', onclick: () => downloadSelected({ items: [it], sel: 0 }) }, 'Download'),
+        h('button', { class: 'small', title: 'Add this image to the Output Gallery', onclick: () => stashToGallery(it) }, 'Add to Gallery'),
+        h('button', { class: 'small', disabled: !match, title: match ? 'Load this image\'s settings into the Generate form' : 'Doesn\'t match a configured functional workflow',
+          onclick: () => {
+            if (busy) return toast('Cancel the running generation first.');
+            closeStash();
+            applyPromptSettings(it.a, `stashed ${it.filename}`);
+          } }, 'Load Settings'),
+        h('button', { class: 'small', disabled: !it.a, title: 'Download the API-format prompt that made this image', onclick: () => downloadJSON(it.a, `prompt-${it.number}.json`) }, 'Prompt JSON'),
+        h('button', { class: 'small danger', title: 'Remove this image from the stash', onclick: () => stashRemove([it]) }, 'Remove')),
+    ));
+}
+function stashToGallery(it) {
+  if (busy) return toast('Cancel the running generation first.');
+  // The gallery revokes its own blob URLs, so it gets a separate one.
+  const url = URL.createObjectURL(it.blob);
+  gallery.items.push({ filename: it.filename, url, src: url, seed: it.seed, batchIndex: it.batchIndex, blob: it.blob });
+  gallery.sel = gallery.items.length - 1;
+  renderGallery();
+  toast(`Added ${it.filename} to the Output Gallery`);
 }
 
 /* ---------- mask editor ---------- */
@@ -3936,9 +4114,7 @@ function bindGenerate() {
   });
   $('#btnToInput').addEventListener('click', async () => {
     const it = gallery.items[gallery.sel];
-    if (!it) return;
-    try { await setInputImage(await itemBlob(it), it.filename); }
-    catch (e) { toast('Could not load the image: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); }
+    if (it) itemToInput(it);
   });
   $('#btnToExtras').addEventListener('click', async () => {
     const it = gallery.items[gallery.sel];
@@ -3958,6 +4134,11 @@ function bindGenerate() {
   $('#histMax').addEventListener('change', loadHistory);
   $('#histClose').addEventListener('click', closeHistory);
   $('#historyDlg').addEventListener('click', (e) => { if (e.target.id === 'historyDlg') closeHistory(); });
+  $('#btnStash').addEventListener('click', openStash);
+  $('#stashClear').addEventListener('click', () => clearStash(false));
+  $('#stashClearAll').addEventListener('click', () => { if (confirm('Remove every image from the Image Stash, including the pinned ones?')) clearStash(true); });
+  $('#stashClose').addEventListener('click', closeStash);
+  $('#stashDlg').addEventListener('click', (e) => { if (e.target.id === 'stashDlg') closeStash(); });
   $('#viewerClose').addEventListener('click', closeViewer);
   $('#viewerDl').addEventListener('click', () => downloadSelected(viewing));
   $('#viewerLink').addEventListener('click', (e) => e.preventDefault());
@@ -4015,6 +4196,7 @@ function bindGenerate() {
       return;
     }
     if (!$('#historyDlg').hidden && e.key === 'Escape') closeHistory();
+    if (!$('#stashDlg').hidden && e.key === 'Escape') closeStash();
   });
   window.addEventListener('resize', () => { layout(); fitMaskEditor(); });
 }
@@ -4029,10 +4211,7 @@ function bindExtras() {
   $('#btnExDlAll').addEventListener('click', () => downloadAll(exOut, 'ainvil-extras'));
   $('#btnExToInput').addEventListener('click', async () => {
     const it = exOut.items[exOut.sel];
-    if (!it) return;
-    try { await setInputImage(await itemBlob(it), it.filename); }
-    catch (e) { return toast('Could not load the image: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); }
-    showTab('generate');
+    if (it && await itemToInput(it)) showTab('generate');
   });
   // Pasted images go to the first image parameter.
   document.addEventListener('paste', async (e) => {
@@ -4065,7 +4244,8 @@ function bindConfig() {
 
   $('#btnExportAll').addEventListener('click', () => downloadJSON(config, 'ainvil-config.json'));
   $('#btnResetConfig').addEventListener('click', () => {
-    if (!confirm('Replace the whole configuration with the built-in defaults?')) return;
+    if (!confirm('Replace the whole configuration with the built-in defaults? This also empties the Image Stash, including the pinned images.')) return;
+    clearStash(true);
     const url = config.connection.apiUrl;
     config = defaultConfig();
     config.connection.apiUrl = url;
