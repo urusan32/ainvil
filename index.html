@@ -160,6 +160,24 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 .mask-wrap { position: relative; }
 .mask-wrap img, .mask-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .mask-wrap canvas { opacity: .55; touch-action: none; cursor: none; }
+.dialog { background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius); width: min(960px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; box-sizing: border-box; }
+.dialog-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dialog-head h2 { margin: 0; }
+.dialog-head .spacer { flex: 1; }
+.dialog-head label { display: flex; align-items: center; gap: 6px; }
+.dialog-head select { width: auto; margin: 0; }
+.hist-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 80px; }
+.hist-row { display: grid; grid-template-columns: 160px 1fr; gap: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: var(--bg2); }
+.hist-row .actions { margin-top: 6px; gap: 4px; }
+.hist-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; align-content: start; }
+.hist-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; background: var(--input); display: block; }
+.hist-thumbs img:only-child, .hist-thumbs .placeholder { grid-column: 1 / -1; }
+.hist-meta { font-size: 12px; color: var(--muted); word-break: break-word; }
+.hist-meta b { color: var(--fg); }
+.hist-meta .ok { color: var(--ok); } .hist-meta .err, .hist-row .err { color: var(--err); }
+.hist-row .err { font-size: 12px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+.hist-prompt { font-size: 13px; margin: 4px 0; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 600px) { .hist-row { grid-template-columns: 1fr; } .hist-thumbs { max-width: 200px; } }
 .brush-ring { position: fixed; border: 1px solid #fff; box-shadow: 0 0 0 1px #000; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); z-index: 101; }
 
 .config-wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap); }
@@ -295,6 +313,7 @@ table.map td:first-child .hint { display: block; }
         <button id="btnUseSeed" title="Copy this image's seed into the Seed field">Use Seed</button>
         <button id="btnToInput" title="Load this image as the input image">Use as Input</button>
         <button id="btnToExtras" title="Add this image to the current Extras workflow's input images">Send to Extras</button>
+        <button id="btnHistory" title="Show the recent prompts the server has run, from any client">History…</button>
         <button id="btnClearGallery" title="Remove all images from the Output Gallery (the files stay on the server)">Clear</button>
       </div>
     </section>
@@ -492,6 +511,21 @@ table.map td:first-child .hint { display: block; }
   </div>
 </section>
 </main>
+
+<!-- Server history (before the viewer so the viewer opens on top of it) -->
+<div id="historyDlg" class="overlay" hidden>
+  <div class="dialog">
+    <div class="dialog-head">
+      <h2>Server History</h2>
+      <label>Show <select id="histMax"><option>25</option><option selected>50</option><option>100</option><option>200</option></select></label>
+      <button id="histRefresh">Refresh</button>
+      <span class="spacer"></span>
+      <button id="histClose" title="Close (Esc)">×</button>
+    </div>
+    <div class="hint">Recent prompts from every client of this ComfyUI server, newest first. The server keeps them in memory, so they're gone after a restart.</div>
+    <div class="hist-list" id="histList"></div>
+  </div>
+</div>
 
 <!-- Full screen image viewer -->
 <div id="viewer" class="overlay" hidden>
@@ -1006,6 +1040,7 @@ const api = {
     return this.request('prompt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, client_id: clientId }) });
   },
   history(id) { return this.request('history/' + encodeURIComponent(id)); },
+  recentHistory(max) { return this.request('history?max_items=' + max); },
   interrupt(promptId) {
     return this.request('interrupt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(promptId ? { prompt_id: promptId } : {}) });
   },
@@ -1910,7 +1945,7 @@ function renderGallery() {
   // finished image between previews. Picking a thumbnail goes back to normal selection for the rest of the run.
   const live = livePreviewOn() && !gallery.picked;
   const thumb = (x, i) => h('img', {
-    src: x.src, loading: 'lazy', class: i === gallery.sel && !(live && gallery.preview) ? 'sel' : '', alt: x.filename, title: `seed ${x.seed}`,
+    src: x.src, loading: 'lazy', class: i === gallery.sel && !(live && gallery.preview) ? 'sel' : '', alt: x.filename, title: x.seed != null ? `seed ${x.seed}` : x.filename,
     onclick: () => { gallery.sel = i; if (busy) gallery.picked = true; renderGallery(); },
   });
   if (live && gallery.preview) {
@@ -1928,7 +1963,7 @@ function renderGallery() {
   gallery.sel = live ? items.length - 1 : Math.min(gallery.sel, items.length - 1);
   const it = items[gallery.sel];
   main.replaceChildren(h('img', { src: it.src, alt: it.filename, onclick: () => openViewer(gallery, gallery.sel) }));
-  info.textContent = `${gallery.sel + 1} / ${items.length} · seed ${it.seed}${it.batchIndex ? ` (batch #${it.batchIndex})` : ''} · ${it.filename}`;
+  info.textContent = `${gallery.sel + 1} / ${items.length}${it.seed != null ? ` · seed ${it.seed}` : ''}${it.batchIndex ? ` (batch #${it.batchIndex})` : ''} · ${it.filename}`;
   thumbs.replaceChildren(...items.map(thumb));
 }
 
@@ -2441,9 +2476,14 @@ async function loadSettingsFromPng(file) {
   try { a = JSON.parse((await readPngText(file)).prompt || 'null'); }
   catch (e) { return toast('Could not read the image metadata: ' + errText(e), 'error'); }
   if (!isApiWorkflow(a)) return toast('This image has no ComfyUI prompt metadata.', 'error');
+  await applyPromptSettings(a, file.name);
+}
+
+// Sets the Generate form from an API prompt (from a PNG or the server history). `from` names it in the status.
+async function applyPromptSettings(a, from) {
   try { await ensureObjectInfo(); } catch { /* UI-format templates still convert without it */ }
   const match = matchPrompt(a);
-  if (!match) return toast('This image does not match any configured functional workflow.', 'error');
+  if (!match) return toast(`${from} does not match any configured functional workflow.`, 'error');
   const { fw, mode } = match;
   const m = fw.workflows[mode].mappings || {};
   const set = (gk, key, xf = (v) => v) => { const v = promptValue(a, m, key); if (v !== undefined) gen[gk] = xf(v); };
@@ -2503,7 +2543,119 @@ async function loadSettingsFromPng(file) {
     try { await loadPromptImage(ref, mode); }
     catch (e) { toast(`Could not load the input image "${ref}" from the server: ${errText(e)}`, 'error'); }
   }
-  setStatus(`Loaded settings from ${file.name} (${fw.name}, ${mode}).`, 'ok');
+  setStatus(`Loaded settings from ${from} (${fw.name}, ${mode}).`, 'ok');
+}
+
+/* ---------- server history ---------- */
+// ComfyUI keeps recent prompts from all clients in memory. GET /history?max_items=N returns
+// {id: {prompt: [number, id, apiPrompt, extra_data, outputNodes], outputs, status: {status_str, messages}}}.
+const hist = { blobs: [], loading: 0 };
+
+function openHistory() {
+  $('#historyDlg').hidden = false;
+  loadHistory();
+}
+function closeHistory() {
+  hist.loading++;
+  $('#historyDlg').hidden = true;
+  $('#histList').replaceChildren();
+  clearHistoryBlobs();
+}
+function clearHistoryBlobs() {
+  for (const u of hist.blobs) URL.revokeObjectURL(u);
+  hist.blobs = [];
+}
+
+async function loadHistory() {
+  const list = $('#histList'), token = ++hist.loading;
+  list.replaceChildren(h('div', { class: 'placeholder' }, 'Loading…'));
+  let data;
+  try {
+    data = await api.recentHistory(clampInt($('#histMax').value, 1, 1000, 50));
+    try { await ensureObjectInfo(); } catch { /* entries just won't match a workflow */ }
+  } catch (e) {
+    if (token === hist.loading) list.replaceChildren(h('div', { class: 'errorbox' }, errText(e)));
+    return;
+  }
+  if (token !== hist.loading) return;
+  clearHistoryBlobs();
+  const entries = Object.entries(data || {}).map(([id, e]) => historyEntry(id, e)).sort((x, y) => y.number - x.number);
+  list.replaceChildren(...(entries.length ? entries.map(historyRow) : [h('div', { class: 'placeholder' }, 'The server has no history yet.')]));
+}
+
+function historyEntry(id, e) {
+  const [number, , a, extra] = e.prompt || [];
+  const st = e.status || {}, msgs = st.messages || [];
+  const msg = (type) => msgs.find((x) => x[0] === type)?.[1];
+  const start = msg('execution_start')?.timestamp;
+  const end = (msg('execution_success') || msg('execution_error') || msg('execution_interrupted'))?.timestamp;
+  const isApi = isApiWorkflow(a);
+  let match = null;
+  try { if (isApi) match = matchPrompt(a); } catch { /* shown as another workflow */ }
+  const m = match?.fw.workflows[match.mode].mappings || {};
+  const val = (k) => (match ? promptValue(a, m, k) : undefined);
+  // For workflows we don't know, the first text input is usually the prompt.
+  const text = val('prompt') ?? (isApi ? Object.values(a).map((n) => n?.inputs?.text).find((t) => typeof t === 'string' && t) : undefined);
+  return {
+    id, number: Number(number) || 0, a: isApi ? a : null, match, text, seed: val('seed'), model: val('model'),
+    time: extra?.create_time ?? start, secs: start && end ? (end - start) / 1000 : null, mine: extra?.client_id === clientId,
+    status: msg('execution_interrupted') ? 'interrupted' : st.status_str || (st.completed ? 'success' : 'unknown'),
+    err: msg('execution_error'),
+    images: Object.values(e.outputs || {}).flatMap((o) => o.images || []).filter((im) => im?.filename),
+  };
+}
+
+function historyRow(en) {
+  const items = en.images.map((im) => ({ ...im, url: api.viewUrl(im), src: api.viewUrl(im), seed: en.seed, blob: null }));
+  const g = { items, sel: 0, render() {} };
+  const thumbs = items.map((it, i) => {
+    // Small webp previews from /view; from file:// Firefox blocks the direct load, so fetch those as blobs.
+    const img = h('img', { src: it.url + '&preview=webp;60', loading: 'lazy', alt: it.filename, title: it.filename });
+    img.onerror = () => {
+      img.onerror = null;
+      fetchBlob(img.src).then((b) => { const u = URL.createObjectURL(b); hist.blobs.push(u); img.src = u; }).catch(() => {});
+    };
+    img.onclick = async () => {
+      if (!it.blob) {
+        try { it.blob = await fetchBlob(it.url); it.src = URL.createObjectURL(it.blob); hist.blobs.push(it.src); }
+        catch (e) { console.warn('Falling back to direct image URL', e); }
+      }
+      if (!$('#historyDlg').hidden) openViewer(g, i);
+    };
+    return img;
+  });
+  const wf = en.match ? `${en.match.fw.name} · ${en.match.mode}` : 'other workflow';
+  return h('div', { class: 'hist-row' },
+    h('div', { class: 'hist-thumbs' }, thumbs.length ? thumbs : h('div', { class: 'placeholder' }, 'No images')),
+    h('div', {},
+      h('div', { class: 'hist-meta' },
+        h('b', {}, `#${en.number}`),
+        en.time ? ` · ${new Date(en.time).toLocaleString()}` : '',
+        en.secs != null ? ` · ${en.secs.toFixed(1)} s` : '',
+        ' · ', h('span', { class: en.status === 'success' ? 'ok' : 'err' }, en.status),
+        ` · ${wf}${en.mine ? ' · this tab' : ''}`),
+      en.err && h('div', { class: 'err' }, `Node #${en.err.node_id} (${en.err.node_type}): ${en.err.exception_message}`),
+      en.text && h('div', { class: 'hist-prompt', title: en.text }, en.text),
+      h('div', { class: 'hist-meta' }, [en.seed != null && `seed ${en.seed}`, en.model, `${items.length} image(s)`].filter(Boolean).join(' · ')),
+      h('div', { class: 'actions' },
+        h('button', { class: 'small', disabled: !items.length, title: 'Add these images to the Output Gallery', onclick: () => historyToGallery(en) }, 'Add to Gallery'),
+        h('button', { class: 'small', disabled: !en.match, title: en.match ? 'Load this prompt\'s settings into the Generate form' : 'Doesn\'t match a configured functional workflow',
+          onclick: () => {
+            if (busy) return toast('Cancel the running generation first.');
+            closeHistory();
+            applyPromptSettings(en.a, `history #${en.number}`);
+          } }, 'Load Settings'),
+        h('button', { class: 'small', disabled: !en.a, title: 'Download the API-format prompt the server ran', onclick: () => downloadJSON(en.a, `prompt-${en.number}.json`) }, 'Prompt JSON')),
+    ));
+}
+
+async function historyToGallery(en) {
+  if (busy) return toast('Cancel the running generation first.');
+  const first = gallery.items.length;
+  for (const [bi, im] of en.images.entries()) gallery.items.push(await galleryItem(im, en.seed, bi));
+  gallery.sel = first;
+  renderGallery();
+  toast(`Added ${en.images.length} image(s) from #${en.number} to the Output Gallery`);
 }
 
 /* ---------- mask editor ---------- */
@@ -3376,6 +3528,7 @@ function bindGenerate() {
   $('#btnUseSeed').addEventListener('click', () => {
     const it = gallery.items[gallery.sel];
     if (!it) return;
+    if (it.seed == null) return toast('The seed of this image is unknown.');
     gen.seed = it.seed; gen.randomSeed = false;
     $('#seed').value = it.seed; $('#randomSeed').checked = false;
     saveGenSoon();
@@ -3400,6 +3553,11 @@ function bindGenerate() {
     renderExParams();
     showTab('extras');
   });
+  $('#btnHistory').addEventListener('click', openHistory);
+  $('#histRefresh').addEventListener('click', loadHistory);
+  $('#histMax').addEventListener('change', loadHistory);
+  $('#histClose').addEventListener('click', closeHistory);
+  $('#historyDlg').addEventListener('click', (e) => { if (e.target.id === 'historyDlg') closeHistory(); });
   $('#viewerClose').addEventListener('click', closeViewer);
   $('#viewerDl').addEventListener('click', () => downloadSelected(viewing));
   $('#viewerLink').addEventListener('click', (e) => e.preventDefault());
@@ -3452,7 +3610,9 @@ function bindGenerate() {
       if (e.key === 'Escape') closeViewer();
       else if (e.key === 'ArrowLeft') stepViewer(-1);
       else if (e.key === 'ArrowRight') stepViewer(1);
+      return;
     }
+    if (!$('#historyDlg').hidden && e.key === 'Escape') closeHistory();
   });
   window.addEventListener('resize', () => { layout(); fitMaskEditor(); });
 }

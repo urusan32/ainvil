@@ -37,6 +37,7 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - When the page is served over http(s), right-click › *Save Image As* uses the image's real filename. Opened from disk (`file://`), Firefox can only show the image as a nameless blob, so use **Download** or right-click › *Save Link As* to get the real filename.
   - **Download All** downloads the whole run as a ZIP file.
   - **Use Seed** copies the selected image's seed into the Seed field. **Use as Input** loads the image as the input image for img2img. **Send to Extras** adds it to the current Extras workflow's images and switches to Extras. **Clear** empties the gallery (the files stay on the server).
+  - **History…** opens the server's recent prompt history (from every client, newest first; ComfyUI keeps it in memory, so it is lost when the server restarts). Each entry shows its output thumbnails, time, run time, status (and error), the matching functional workflow and mode, the prompt, seed and model. Click a thumbnail for the full-screen viewer. **Add to Gallery** copies the entry's images into the Output Gallery, **Load Settings** loads its settings like dropping its PNG on Main, and **Prompt JSON** downloads the API prompt the server ran.
 - **LoRA**: add any number of LoRAs from the server, filtered to the workflow's model family, with a weight for each.
   - The search box narrows every LoRA list to names containing the words you type, and **+ Add LoRA** adds the first match.
   - The **On/Off** button keeps a LoRA in the list without using it.
