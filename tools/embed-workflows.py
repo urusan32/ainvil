@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Embed workflows/*-minworkflow.json into index.html as the default Anima workflows.
+"""Embed workflows/*-minworkflow-cads.json into index.html as the default Anima workflows.
+
+The plain *-minworkflow.json files are the same workflows without the CADS node.
 
 Usage: python3 tools/embed-workflows.py
 """
@@ -9,7 +11,7 @@ import re
 
 root = pathlib.Path(__file__).resolve().parent.parent
 wfs = {
-    mode: json.loads((root / "workflows" / f"{mode}-minworkflow.json").read_text())
+    mode: json.loads((root / "workflows" / f"{mode}-minworkflow-cads.json").read_text())
     for mode in ("txt2img", "img2img", "inpainting")
 }
 blob = json.dumps(wfs, separators=(",", ":")).replace("</", "<\\/")

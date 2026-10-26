@@ -4,7 +4,7 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 
 ## Shape
 - Everything is in `index.html`: CSS, markup, and one inline `<script>`. There's no build step and no dependencies. Ask the user before adding any.
-- The default Anima workflows (ComfyUI **UI format**) sit in `<script type="application/json" id="default-workflows">`. They're generated from `workflows/*-minworkflow.json` by `tools/embed-workflows.py`, so don't hand-edit that blob.
+- The default Anima workflows (ComfyUI **UI format**) sit in `<script type="application/json" id="default-workflows">`. They're generated from `workflows/*-minworkflow-cads.json` by `tools/embed-workflows.py`, so don't hand-edit that blob. The plain `*-minworkflow.json` files are the same graphs without the CADS node (handy for testing the "not configured" path).
 - The app default is `http://localhost:8188/`.
 
 ## Key design decisions
@@ -12,10 +12,12 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
   - It handles links, Reroute, PrimitiveNode, muted (mode 2) and bypassed (mode 4) nodes.
   - For widget values it prefers `widgets_values_named`, then `/object_info` input order, skipping `control_after_generate` values.
   - Subgraphs are rejected.
+  - Node types the server doesn't know are dropped as frontend-only, unless they have linked outputs. Those are kept (e.g. CADS without comfyui-cads), so mappings still find them and `buildPrompt` can bypass them.
 - **Mappings** are `{node, input}` targets keyed by functional parameter, one set per mode. Node ids are the same in UI and API format. The parameter list is `FPARAMS`. Structural parameters:
   - `lora` clones and chains the template node; zero LoRAs remove it.
   - `batch_repeat` inserts `RepeatLatentBatch`.
   - `output` swaps SaveImage→PreviewImage when saveImage is off.
+  - `cads` (node only): the CADS node gets its inputs from `gen.cads` (`CADS_FIELDS`), with seed = image seed mod 2^32. When `cadsActive()` is false, `bypassNode()` removes the node and passes its model input through.
 - **Denoise** is shown as a start step: `denoise = 1 - step/steps`. In txt2img it is always 1.
 - **Inpainting**: the image is uploaded with `/upload/image`. The mask is then uploaded with `/upload/mask` and `original_ref`, which writes alpha = 255 - mask into a server-side copy. This keeps the original RGB under the mask; client-side alpha compositing would lose it to premultiplication. Uploads go to `input/ainvil/` with content-hash names and are cached per server.
 - **Images** are fetched with CORS into blob URLs. Firefox blocks `<img src="http://…">` from `file://` pages.
@@ -28,10 +30,10 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 - Model/LoRA **search** (`searchList`, plain words, AND) runs on top of the workflow's regex filter (`filterList`).
 - Config schema version is `CONFIG_VERSION = 1`; keep it at 1 during alpha. localStorage keys: `ainvil.config`, `ainvil.generate` (form state), `ainvil.tab`.
 - The Generate layout is 3, 2 or 1 columns. `LAYOUTS` moves the section elements between columns, and the dynamic-height sections (Custom Parameters, LoRA) sit at the bottom of their columns.
+- **CADS**: `cadsBlocker()` returns the reason it can't run: not mapped for the mode, server feature off, or no CADS class in `/object_info`. If there's none, the `gen.cads.on` master switch decides. Defaults come from the template node (`templateDefaults().cads`). A main Steps change sets `gen.cads.total_steps` (one-way). Load from PNG sets `on` from whether the CADS node is in the prompt, and a missing CADS node doesn't count against `matchPrompt`.
 
 ## Not done yet
 - Extras tab UI (custom workflows can be configured but not run).
-- CADS (only a placeholder section plus the server feature toggle).
 
 ## Testing
 Headless Firefox driven over Marionette (raw socket, Python stdlib) works well for end-to-end checks against the test server.

@@ -41,6 +41,9 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - The search box narrows every LoRA list to names containing the words you type, and **+ Add LoRA** adds the first match.
   - The **On/Off** button keeps a LoRA in the list without using it.
 - **Custom Parameters**: extra settings defined by the selected workflow. Anima has *Resize method* and *Filename prefix*.
+- **CADS** (Condition-Annealed Diffusion Sampler): adds scheduled noise to the conditioning for more varied images. It needs the [comfyui-cads](https://github.com/asagi4/ComfyUI-CADS) extension on the server and a workflow with a CADS node (the built-in Anima workflows have one).
+  - **Enable CADS** turns it on or off. When it's off, unsupported by the server (*Server Features › CADS*), or not configured for the workflow, the CADS node is bypassed and the section says why.
+  - The settings start at the workflow's CADS node values. **Total steps** follows the main Steps whenever Steps changes, but changing it doesn't change Steps. The CADS seed follows the image seed.
 
 The page remembers your Generate settings (not images) between visits.
 
@@ -60,6 +63,7 @@ Each workflow can be exported and imported on its own. All exported files carry 
 - **LoRA template**: the sample LoRA loader node in your workflow. It is removed when no LoRAs are selected, and otherwise cloned and chained once per LoRA.
 - **Batch repeat**: for workflows without an Empty Latent Image (img2img and inpainting), batch size works by inserting a `RepeatLatentBatch` node in front of the mapped latent input.
 - **Output image**: Save Image nodes become Preview Image nodes when *Server Preferences › Save Image* is off.
+- **CADS**: the CADS node, set from the CADS section. When CADS is off it is removed and its model input is passed straight through. Leave it unmapped for workflows without CADS.
 - **Inpainting**: the mask is sent as the input image's alpha channel (via ComfyUI's `/upload/mask`), so the Load Image node's MASK output carries it.
 - **Filename prefixes**: `%date:yyyyMMdd%` and `%Node title.widget%` are expanded by Ainvil, the same way the ComfyUI frontend does it.
 
@@ -71,7 +75,7 @@ Each workflow can be exported and imported on its own. All exported files carry 
 
 ## Development
 
-The default Anima workflows live in `workflows/` and are embedded into `index.html`. After editing them, run:
+The default Anima workflows live in `workflows/` (`*-minworkflow-cads.json`; the plain `*-minworkflow.json` files are the same graphs without CADS) and are embedded into `index.html`. After editing them, run:
 
 ```sh
 python3 tools/embed-workflows.py
