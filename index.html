@@ -66,6 +66,24 @@ main { padding: var(--gap) 16px 40px; }
 .columns { display: flex; gap: var(--gap); align-items: flex-start; }
 .column { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--gap); }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+
+/* Generate layout editing: drag sections by their headers; hidden sections only show while editing. */
+.layout-bar { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; margin-bottom: var(--gap); border-color: var(--accent); }
+.layout-bar .grow { flex: 1 1 260px; }
+.layout-bar[hidden] { display: none; }
+.columns .card.sec-hidden { display: none; }
+.columns .sec-vis, .columns .sec-tag { display: none; }
+.columns.editing { align-items: stretch; }
+.columns.editing .column { min-height: 160px; padding-bottom: 48px; outline: 1px dashed var(--line); outline-offset: 4px; border-radius: var(--radius); }
+.columns.editing .card > h2 { display: flex; align-items: center; gap: 8px; cursor: grab; touch-action: none; user-select: none; }
+.columns.editing .sec-vis { display: inline-block; margin-left: auto; text-transform: none; letter-spacing: 0; }
+.columns.editing .card.sec-hidden { display: block; border-style: dashed; }
+.columns.editing .card.sec-hidden > :not(h2) { opacity: .35; }
+.columns.editing .sec-hidden .sec-tag { display: inline-block; letter-spacing: 0; }
+.columns .card.dragging { opacity: .4; }
+.drop-line { height: 4px; margin: -2px 0; background: var(--accent); border-radius: 2px; flex: none; }
+.drag-ghost { position: fixed; z-index: 60; pointer-events: none; background: var(--card); border: 1px solid var(--accent); border-radius: 6px; padding: 6px 12px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+body.layout-dragging, body.layout-dragging * { cursor: grabbing !important; user-select: none; }
 .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 .row > .grow { flex: 1 1 200px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -255,12 +273,21 @@ table.map td:first-child .hint { display: block; }
     <button class="tab" data-tab="extras" role="tab">Extras</button>
     <button class="tab" data-tab="config" role="tab">Configuration</button>
   </nav>
+  <button id="btnEditLayout" class="small" title="Move or hide the Generate tab's sections">Edit layout</button>
   <div id="connStatus" class="conn" title="Open Configuration">Not connected</div>
 </header>
 
 <main>
 <!-- ============================== GENERATE ============================== -->
 <section id="tab-generate" class="tabpanel active">
+  <div id="layoutBar" class="card layout-bar" hidden>
+    <div class="grow">
+      <b>Editing layout</b> <span id="layoutInfo" class="hint"></span>
+      <div class="hint">Drag a section by its header to move it. Hide removes it from the page; hidden sections only show here, dimmed. Each width range has its own arrangement; hidden sections apply to all of them.</div>
+    </div>
+    <button id="btnLayoutReset" title="Restore the default arrangement for this width and show all sections">Reset to default</button>
+    <button id="btnLayoutDone" class="primary">Done</button>
+  </div>
   <div id="genColumns" class="columns"></div>
   <div id="sectionPool" hidden>
 
@@ -524,6 +551,10 @@ table.map td:first-child .hint { display: block; }
         <div class="row">
           <label class="chk"><input type="checkbox" id="cfgShowLivePreview"> Show live preview</label>
           <span class="hint">While generating, show the server's preview in the main gallery image instead of the first finished image. Needs the Live preview server feature.</span>
+        </div>
+        <div class="row">
+          <button id="btnCfgEditLayout" class="small">Edit Generate layout</button>
+          <span class="hint">Move or hide the Generate tab's sections. Also available from the Edit layout button in the header.</span>
         </div>
       </div>
     </section>
@@ -1056,6 +1087,9 @@ function normalizeClientPrefs(p) {
     maskColor: /^#[0-9a-f]{6}$/i.test(p?.maskColor || '') ? p.maskColor.toLowerCase() : DEFAULT_MASK_COLOR,
     showLivePreview: p?.showLivePreview !== false,
     recentColors: (Array.isArray(p?.recentColors) ? p.recentColors : []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).map((c) => c.toLowerCase()).slice(0, RECENT_COLORS),
+    // Generate layouts by column count (only the ones the user changed) and the hidden section ids.
+    layouts: Object.fromEntries([1, 2, 3].map((n) => [n, normalizeLayout(p?.layouts?.[n], n)]).filter(([, l]) => l)),
+    hiddenSections: [...new Set(Array.isArray(p?.hiddenSections) ? p.hiddenSections : [])].filter((id) => SECTION_IDS.includes(id)),
   };
 }
 
@@ -3958,20 +3992,154 @@ function clearExtras() {
 }
 
 /* ---------- layout ---------- */
+// Default arrangement per column count. Here the dynamic-height sections (Custom Parameters, LoRA) sit at the
+// bottom of their columns; user layouts (clientPreferences.layouts) may put them anywhere.
 const LAYOUTS = {
   3: [['sec-main', 'sec-params', 'sec-custom'], ['sec-gallery', 'sec-lora'], ['sec-input', 'sec-inparams', 'sec-cads']],
   2: [['sec-main', 'sec-gallery', 'sec-custom'], ['sec-params', 'sec-input', 'sec-inparams', 'sec-cads', 'sec-lora']],
   1: [['sec-main', 'sec-gallery', 'sec-input', 'sec-inparams', 'sec-params', 'sec-custom', 'sec-lora', 'sec-cads']],
 };
-let currentCols = 0;
-function layout() {
+const SECTION_IDS = LAYOUTS[1][0];
+const LAYOUT_WIDTHS = { 3: 'window 1400 px or wider', 2: 'window 900–1399 px', 1: 'window under 900 px' };
+
+// Keeps known sections once each; missing ones go at the end of the last column. Wrong shape = null (default).
+function normalizeLayout(l, cols) {
+  if (!Array.isArray(l) || l.length !== cols || !l.every(Array.isArray)) return null;
+  const seen = new Set();
+  const out = l.map((ids) => ids.filter((id) => SECTION_IDS.includes(id) && !seen.has(id) && seen.add(id)));
+  out[cols - 1].push(...SECTION_IDS.filter((id) => !seen.has(id)));
+  return out;
+}
+
+let currentCols = 0, layoutEditing = false, ldrag = null;
+function layout({ force = false } = {}) {
   const w = window.innerWidth;
   const cols = w >= 1400 ? 3 : w >= 900 ? 2 : 1;
-  if (cols === currentCols) return;
+  if (cols === currentCols && !force) return;
+  endLayoutDrag(false);
   currentCols = cols;
   const host = $('#genColumns');
-  const colEls = LAYOUTS[cols].map((ids) => h('div', { class: 'column' }, ids.map((id) => document.getElementById(id))));
+  const ids = config.clientPreferences.layouts[cols] || LAYOUTS[cols];
+  const colEls = ids.map((list) => h('div', { class: 'column' }, list.map((id) => document.getElementById(id))));
   host.replaceChildren(...colEls);
+  markHiddenSections();
+  $('#layoutInfo').textContent = `${cols} column${cols > 1 ? 's' : ''} (${LAYOUT_WIDTHS[cols]})`;
+}
+
+// The Hide/Show button and "Hidden" tag live in each section's h2; CSS shows them only while editing.
+function addSectionTools() {
+  for (const id of SECTION_IDS) {
+    const sec = document.getElementById(id), h2 = $(':scope > h2', sec);
+    sec.dataset.name = h2.textContent;
+    h2.append(h('span', { class: 'badge sec-tag' }, 'Hidden'),
+      h('button', { type: 'button', class: 'small sec-vis', onclick: () => toggleSectionHidden(id) }));
+  }
+}
+
+function markHiddenSections() {
+  const hidden = config.clientPreferences.hiddenSections;
+  for (const id of SECTION_IDS) {
+    const sec = document.getElementById(id), on = hidden.includes(id);
+    sec.classList.toggle('sec-hidden', on);
+    $('.sec-vis', sec).textContent = on ? 'Show' : 'Hide';
+  }
+}
+
+function toggleSectionHidden(id) {
+  const list = config.clientPreferences.hiddenSections, i = list.indexOf(id);
+  if (i < 0) list.push(id); else list.splice(i, 1);
+  saveConfig();
+  markHiddenSections();
+}
+
+function setLayoutEditing(on) {
+  endLayoutDrag(false);
+  layoutEditing = on;
+  $('#genColumns').classList.toggle('editing', on);
+  $('#layoutBar').hidden = !on;
+  $('#btnEditLayout').classList.toggle('on', on);
+}
+
+function resetLayout() {
+  delete config.clientPreferences.layouts[currentCols];
+  config.clientPreferences.hiddenSections = [];
+  saveConfig();
+  layout({ force: true });
+}
+
+function saveLayout() {
+  config.clientPreferences.layouts[currentCols] = $$('#genColumns > .column').map((c) => [...c.children].map((el) => el.id));
+  saveConfig();
+}
+
+// Dragging moves a drop line between sections; the section itself only moves on release.
+function startLayoutDrag(e) {
+  const h2 = e.target.closest('.card > h2');
+  if (!layoutEditing || e.button !== 0 || !h2 || e.target.closest('button')) return;
+  e.preventDefault();
+  h2.setPointerCapture(e.pointerId);
+  const sec = h2.parentElement;
+  ldrag = { sec, pointer: e.pointerId, x: e.clientX, y: e.clientY, line: h('div', { class: 'drop-line' }), ghost: h('div', { class: 'drag-ghost' }, sec.dataset.name) };
+  sec.classList.add('dragging');
+  document.body.classList.add('layout-dragging');
+  document.body.append(ldrag.ghost);
+  placeLayoutDrop();
+  ldrag.raf = requestAnimationFrame(layoutAutoScroll);
+}
+
+function placeLayoutDrop() {
+  const { sec, line, ghost, x, y } = ldrag;
+  ghost.style.left = x + 12 + 'px';
+  ghost.style.top = y + 12 + 'px';
+  const cols = $$('#genColumns > .column');
+  const dist = (c) => { const r = c.getBoundingClientRect(); return x < r.left ? r.left - x : x > r.right ? x - r.right : 0; };
+  const col = cols.reduce((a, c) => (dist(c) < dist(a) ? c : a));
+  const before = [...col.children].find((el) => {
+    if (el === sec || el === line) return false;
+    const r = el.getBoundingClientRect();
+    return r.height && y < r.top + r.height / 2;
+  });
+  if (line.parentElement !== col || line.nextElementSibling !== (before || null)) col.insertBefore(line, before || null);
+}
+
+function layoutAutoScroll() {
+  if (!ldrag) return;
+  const top = $('.topbar').getBoundingClientRect().bottom;
+  const dy = ldrag.y < top + 40 ? -14 : ldrag.y > window.innerHeight - 40 ? 14 : 0;
+  if (dy) { window.scrollBy(0, dy); placeLayoutDrop(); }
+  ldrag.raf = requestAnimationFrame(layoutAutoScroll);
+}
+
+function moveLayoutDrag(e) {
+  if (!ldrag || e.pointerId !== ldrag.pointer) return;
+  ldrag.x = e.clientX;
+  ldrag.y = e.clientY;
+  placeLayoutDrop();
+}
+
+function endLayoutDrag(commit) {
+  if (!ldrag) return;
+  const { sec, line, ghost, raf } = ldrag;
+  ldrag = null;
+  cancelAnimationFrame(raf);
+  if (commit && line.parentElement) line.replaceWith(sec); else line.remove();
+  ghost.remove();
+  sec.classList.remove('dragging');
+  document.body.classList.remove('layout-dragging');
+  if (commit) saveLayout();
+}
+
+function bindLayout() {
+  addSectionTools();
+  const host = $('#genColumns');
+  host.addEventListener('pointerdown', startLayoutDrag);
+  host.addEventListener('pointermove', moveLayoutDrag);
+  host.addEventListener('pointerup', (e) => { if (ldrag && e.pointerId === ldrag.pointer) endLayoutDrag(true); });
+  host.addEventListener('pointercancel', (e) => { if (ldrag && e.pointerId === ldrag.pointer) endLayoutDrag(false); });
+  $('#btnEditLayout').addEventListener('click', () => setLayoutEditing(!layoutEditing));
+  $('#btnCfgEditLayout').addEventListener('click', () => { showTab('generate'); setLayoutEditing(true); window.scrollTo(0, 0); });
+  $('#btnLayoutDone').addEventListener('click', () => setLayoutEditing(false));
+  $('#btnLayoutReset').addEventListener('click', resetLayout);
 }
 
 /* ======================================================================
@@ -4290,6 +4458,7 @@ async function doImport() {
     saveConfig();
     box.hidden = true;
     stageImport(null);
+    layout({ force: true });
     renderConfig();
     if (!config.functionalWorkflows.some((f) => f.name === gen.fwName)) gen.fwName = config.functionalWorkflows[0]?.name || '';
     renderGen();
@@ -4350,6 +4519,8 @@ function showTab(name) {
   $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   $$('.tabpanel').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
   try { localStorage.setItem('ainvil.tab', name); } catch {}
+  $('#btnEditLayout').hidden = name !== 'generate';
+  if (name !== 'generate' && layoutEditing) setLayoutEditing(false);
 }
 function bindTabs() {
   const show = showTab;
@@ -4603,6 +4774,7 @@ function bindGenerate() {
     }
     if (!$('#historyDlg').hidden && e.key === 'Escape') closeHistory();
     if (!$('#stashDlg').hidden && e.key === 'Escape') closeStash();
+    else if (layoutEditing && e.key === 'Escape' && $('#historyDlg').hidden) { if (ldrag) endLayoutDrag(false); else setLayoutEditing(false); }
   });
   window.addEventListener('resize', () => { layout(); fitMaskEditor(); fitImageEditor(); });
 }
@@ -4656,6 +4828,7 @@ function bindConfig() {
     config = defaultConfig();
     config.connection.apiUrl = url;
     saveConfig();
+    layout({ force: true });
     renderConfig();
     renderGen();
     renderExtras();
@@ -4707,6 +4880,7 @@ function init() {
   config = loadConfig();
   gen = loadGenState();
   ex = loadExState();
+  bindLayout();
   layout();
   bindTabs();
   bindGenerate();

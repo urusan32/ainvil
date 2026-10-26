@@ -52,6 +52,8 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
 
 The page remembers your Generate settings (not images) between visits.
 
+**Edit layout** (in the header while on Generate, or *Client Preferences › Edit Generate layout*) lets you rearrange the sections. Drag a section by its header to move it, within a column or to another one. **Hide** removes a section from the page; while editing, hidden sections are shown dimmed and marked *Hidden*, with a **Show** button. The page uses 3, 2 or 1 columns depending on the window width, and each of these has its own arrangement; hidden sections apply to all of them. **Reset to default** restores the default arrangement for the current width and shows all sections. **Done** (or Esc) ends editing. The layout is saved in the configuration.
+
 ## Extras tab
 
 Runs a *custom workflow*: any ComfyUI workflow with parameters you define in *Configuration › Custom Workflows*. Pick the workflow, fill in its parameters and press **Run**. **Generate Workflow** downloads the API-format workflow for the first image instead, and **Clear** resets the parameters and removes the images.
