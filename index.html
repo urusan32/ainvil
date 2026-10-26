@@ -588,6 +588,7 @@ table.map td:first-child .hint { display: block; }
 <div id="maskEditor" class="overlay" hidden>
   <div class="mask-toolbar">
     <div class="seg"><button id="mePaint" class="on">Paint</button><button id="meErase">Erase</button><button id="meWindow" title="Context window (W): drag inside to move, drag a corner to resize, drag outside to draw a new one; the mouse wheel resizes">Window</button></div>
+    <button id="meCrop" title="Crop the image to the context window and use it as the input image (also adds it to the Image Stash)" hidden>Crop</button>
     <label>Brush <input type="range" id="meSize" min="2" max="300" value="40"></label>
     <label title="Mask display color (doesn't change the mask)">Color <input type="color" id="meColor"></label>
     <button id="meUndo" title="Undo (Ctrl+Z)">Undo</button>
@@ -3164,6 +3165,7 @@ function meRenderBox() {
   const el = $('#meCtx'), info = $('#meCtxInfo');
   const b = gen.inpaintMode === 'focused' && roundBox(windowFor(me.bounds, me.box));
   el.hidden = !b;
+  $('#meCrop').hidden = !(b && me.tool === 'window');
   info.textContent = '';
   if (!b) return;
   const pct = (v, of) => (v / of) * 100 + '%';
@@ -3302,6 +3304,27 @@ function meUndo() {
   me.ctx.putImageData(d, 0, 0);
   recolorMask(me.work);  // the snapshot may predate a color change
   meMaskChanged();
+}
+// Crops the image (and the mask being edited) to the Window tool's box, makes that the input image
+// and stashes it.
+async function meCrop() {
+  const b = roundBox(me.box);
+  if (!b) return;
+  const crop = (src) => {
+    const c = h('canvas', { width: b.w, height: b.h });
+    c.getContext('2d').drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+    return c;
+  };
+  const mask = crop(me.work);
+  const name = `${input.name.replace(/\.[^.]*$/, '')}_crop_${b.w}x${b.h}.png`;
+  try {
+    const blob = await canvasToBlob(crop(input.img));
+    closeMaskEditor(false);
+    await setInputImage(blob, name);
+    setMask(mask);
+    await stashAdd(blob, { filename: name });
+    toast(`Cropped to ${b.w}×${b.h} and added it to the Image Stash`);
+  } catch (e) { toast('Could not crop the image: ' + errText(e), 'error'); }
 }
 function closeMaskEditor(apply) {
   if (apply) {
@@ -4171,6 +4194,7 @@ function bindGenerate() {
   $('#mePaint').addEventListener('click', () => meSetTool('paint'));
   $('#meErase').addEventListener('click', () => meSetTool('erase'));
   $('#meWindow').addEventListener('click', () => meSetTool('window'));
+  $('#meCrop').addEventListener('click', meCrop);
   $('#meUndo').addEventListener('click', meUndo);
   $('#meInvert').addEventListener('click', meInvert);
   $('#meFill').addEventListener('click', () => meFill(false));
