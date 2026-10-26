@@ -95,6 +95,7 @@ main { padding: var(--gap) 16px 40px; }
 
 .gallery-main { aspect-ratio: 1; background: var(--input); border: 1px solid var(--line2); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .gallery-main img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+.gallery-main img.live { width: 100%; height: 100%; cursor: default; }
 .placeholder, .ph { color: var(--muted); font-size: 13px; text-align: center; padding: 12px; pointer-events: none; }
 .gallery-info { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 1.4em; word-break: break-all; }
 .thumbs-wrap { container-type: inline-size; margin-top: 8px; }
@@ -387,6 +388,8 @@ table.map td:first-child .hint { display: block; }
       <h2>Server Features</h2>
       <label class="chk"><input type="checkbox" id="cfgCads"> CADS</label>
       <span class="hint"> — requires the comfyui-cads extension on the server.</span>
+      <br><label class="chk"><input type="checkbox" id="cfgLivePreview"> Live preview</label>
+      <span class="hint"> — the server sends preview images while sampling (started with <code>--preview-method</code> other than <code>none</code>).</span>
     </section>
 
     <section class="card">
@@ -406,6 +409,10 @@ table.map td:first-child .hint { display: block; }
           <label class="chk">Mask color <input type="color" id="cfgMaskColor"></label>
           <button id="btnMaskColorReset" class="small">Reset to default</button>
           <span class="hint">Pick a color that stands out from the image you're masking. Only changes the display.</span>
+        </div>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="cfgShowLivePreview"> Show live preview</label>
+          <span class="hint">While generating, show the server's preview in the main gallery image instead of the first finished image. Needs the Live preview server feature.</span>
         </div>
       </div>
     </section>
@@ -723,7 +730,7 @@ function defaultConfig() {
   return {
     version: CONFIG_VERSION,
     connection: { apiUrl: DEFAULT_API },
-    serverFeatures: { cads: false },
+    serverFeatures: { cads: false, livePreview: false },
     serverPreferences: { saveImage: true },
     clientPreferences: normalizeClientPrefs({}),
     functionalWorkflows: [{
@@ -813,6 +820,7 @@ function normalizeClientPrefs(p) {
     galleryColumns: [2, 3, 4].includes(cols) ? cols : 3,
     galleryRows: [1, 2].includes(rows) ? rows : 2,
     maskColor: /^#[0-9a-f]{6}$/i.test(p?.maskColor || '') ? p.maskColor.toLowerCase() : DEFAULT_MASK_COLOR,
+    showLivePreview: p?.showLivePreview !== false,
   };
 }
 
@@ -821,7 +829,7 @@ function normalizeConfig(c) {
   return {
     version: CONFIG_VERSION,
     connection: { apiUrl: String(c.connection?.apiUrl || DEFAULT_API) },
-    serverFeatures: { cads: !!c.serverFeatures?.cads },
+    serverFeatures: { cads: !!c.serverFeatures?.cads, livePreview: !!c.serverFeatures?.livePreview },
     serverPreferences: { saveImage: c.serverPreferences?.saveImage !== false },
     clientPreferences: normalizeClientPrefs(c.clientPreferences),
     functionalWorkflows: (c.functionalWorkflows || []).map((f, i) => normalizeFw(f, `functionalWorkflows[${i}]`)),
@@ -963,8 +971,9 @@ function openSocket() {
   try {
     ws = new WebSocket(base.replace(/^http/i, 'ws') + 'ws?clientId=' + encodeURIComponent(clientId));
   } catch { ws = null; return; }
+  ws.binaryType = 'blob';
   ws.onmessage = (ev) => {
-    if (typeof ev.data !== 'string') return;
+    if (typeof ev.data !== 'string') { onPreviewFrame(ev.data); return; }
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
     const d = msg.data || {};
@@ -982,6 +991,22 @@ function openSocket() {
     // Reconnect quietly while connected to the same server.
     setTimeout(() => { if (connected && wsBase === api.base()) openSocket(); }, 3000);
   };
+}
+// Binary frames: u32 event type, then for type 1 (PREVIEW_IMAGE) a u32 format (1 JPEG, 2 PNG) and the image;
+// for type 4 (PREVIEW_IMAGE_WITH_METADATA) a u32 metadata length, the JSON metadata and the image.
+async function onPreviewFrame(blob) {
+  if (!livePreviewOn() || gallery.picked || !progress.running || !(blob instanceof Blob) || blob.size < 8) return;
+  const dv = new DataView(await blob.slice(0, 8).arrayBuffer());
+  const type = dv.getUint32(0), word = dv.getUint32(4);
+  let img;
+  if (type === 1) img = blob.slice(8, blob.size, word === 2 ? 'image/png' : 'image/jpeg');
+  else if (type === 4) {
+    let meta = {};
+    try { meta = JSON.parse(await blob.slice(8, 8 + word).text()); } catch {}
+    if (meta.prompt_id && !progress.promptIds.has(meta.prompt_id)) return;
+    img = blob.slice(8 + word, blob.size, meta.image_type || 'image/jpeg');
+  } else return;
+  setLivePreview(URL.createObjectURL(img));
 }
 function setProgress(f) { $('#progressBar').style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; }
 
@@ -1389,7 +1414,7 @@ function searchList(list, query) {
    ====================================================================== */
 let gen;
 const input = { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null };
-const gallery = { items: [], sel: 0 };
+const gallery = { items: [], sel: 0, preview: null, previewPending: null, picked: false };
 const uploadCache = new Map();
 let busy = false, cancelRequested = false, activeJobs = [];
 
@@ -1636,20 +1661,51 @@ function renderLoras() {
 function renderGallery() {
   const main = $('#galleryMain'), thumbs = $('#galleryThumbs'), info = $('#galleryInfo');
   const items = gallery.items;
+  // While generating with live preview, the main image follows the run: the current preview, or the newest
+  // finished image between previews. Picking a thumbnail goes back to normal selection for the rest of the run.
+  const live = livePreviewOn() && !gallery.picked;
+  const thumb = (x, i) => h('img', {
+    src: x.src, loading: 'lazy', class: i === gallery.sel && !(live && gallery.preview) ? 'sel' : '', alt: x.filename, title: `seed ${x.seed}`,
+    onclick: () => { gallery.sel = i; if (busy) gallery.picked = true; renderGallery(); },
+  });
+  if (live && gallery.preview) {
+    main.replaceChildren(h('img', { class: 'live', src: gallery.preview, alt: 'Live preview' }));
+    info.textContent = `Live preview${items.length ? ` · ${items.length} done` : ''}`;
+    thumbs.replaceChildren(...items.map(thumb));
+    return;
+  }
   if (!items.length) {
     main.replaceChildren(h('div', { class: 'placeholder' }, busy ? 'Generating…' : 'No images yet'));
     thumbs.replaceChildren();
     info.textContent = '';
     return;
   }
-  gallery.sel = Math.min(gallery.sel, items.length - 1);
+  gallery.sel = live ? items.length - 1 : Math.min(gallery.sel, items.length - 1);
   const it = items[gallery.sel];
   main.replaceChildren(h('img', { src: it.src, alt: it.filename, onclick: () => openViewer(gallery.sel) }));
   info.textContent = `${gallery.sel + 1} / ${items.length} · seed ${it.seed}${it.batchIndex ? ` (batch #${it.batchIndex})` : ''} · ${it.filename}`;
-  thumbs.replaceChildren(...items.map((x, i) => h('img', {
-    src: x.src, loading: 'lazy', class: i === gallery.sel ? 'sel' : '', alt: x.filename, title: `seed ${x.seed}`,
-    onclick: () => { gallery.sel = i; renderGallery(); },
-  })));
+  thumbs.replaceChildren(...items.map(thumb));
+}
+
+function livePreviewOn() { return busy && config.serverFeatures.livePreview && config.clientPreferences.showLivePreview; }
+// Swaps the preview in place once the new frame has decoded, so the main image doesn't flicker or rebuild.
+function setLivePreview(url) {
+  const pending = gallery.previewPending = url;
+  const im = new Image();
+  im.src = url;
+  im.decode().catch(() => {}).then(() => {
+    if (gallery.previewPending !== pending || !livePreviewOn()) { URL.revokeObjectURL(url); return; }
+    const old = gallery.preview;
+    gallery.preview = url;
+    const el = $('#galleryMain img.live');
+    if (el) el.src = url; else renderGallery();
+    if (old) URL.revokeObjectURL(old);
+  });
+}
+function clearLivePreview() {
+  gallery.previewPending = null;
+  if (gallery.preview) URL.revokeObjectURL(gallery.preview);
+  gallery.preview = null;
 }
 
 // The viewer loads the /view URL directly when the browser allows it, because ComfyUI sends a
@@ -1691,6 +1747,8 @@ function resetGallery() {
   for (const it of gallery.items) if (it.blob) URL.revokeObjectURL(it.src);
   gallery.items = [];
   gallery.sel = 0;
+  gallery.picked = false;
+  clearLivePreview();
 }
 async function itemBlob(it) { return it.blob || fetchBlob(it.url); }
 
@@ -1868,6 +1926,7 @@ async function runGenerate() {
       setProgress(0);
       const outputs = await waitForPrompt(job.id);
       job.done = true;
+      clearLivePreview();
       const slotMap = fw.workflows[mode].mappings || {};
       const ids = (slotMap.output || []).map((x) => x.node).filter((id) => outputs[id]);
       const imgs = (ids.length ? ids : Object.keys(outputs)).flatMap((id) => outputs[id]?.images || []);
@@ -1879,6 +1938,8 @@ async function runGenerate() {
     console.error(e);
     setStatus(errText(e) === 'Cancelled' ? 'Cancelled.' : errText(e), errText(e) === 'Cancelled' ? '' : 'error');
   } finally {
+    clearLivePreview();
+    if (!gallery.picked) gallery.sel = 0;
     setBusy(false);
     renderGallery();
   }
@@ -2501,6 +2562,8 @@ function renderConfigLists() {
 function renderConfig() {
   $('#apiUrl').value = config.connection.apiUrl;
   $('#cfgCads').checked = config.serverFeatures.cads;
+  $('#cfgLivePreview').checked = config.serverFeatures.livePreview;
+  $('#cfgShowLivePreview').checked = config.clientPreferences.showLivePreview;
   $('#cfgSaveImage').checked = config.serverPreferences.saveImage;
   $('#cfgGalleryCols').value = config.clientPreferences.galleryColumns;
   $('#cfgGalleryRows').value = config.clientPreferences.galleryRows;
@@ -2606,13 +2669,19 @@ async function autoConfigure() {
   out.className = 'result';
   out.textContent = 'Interrogating server…';
   try {
-    await connect();
+    const stats = await connect();
     const cads = !!OI?.CADS || Object.values(OI || {}).some((n) => /comfyui-cads/i.test(n.python_module || ''));
     config.serverFeatures.cads = cads;
+    // Previews are only sent when the server was started with --preview-method other than none (the default).
+    const argv = stats?.system?.argv || [];
+    const i = argv.findIndex((a) => a === '--preview-method' || a.startsWith('--preview-method='));
+    const pm = i < 0 ? 'none' : argv[i].includes('=') ? argv[i].split('=')[1] : argv[i + 1];
+    const livePreview = pm !== 'none';
+    config.serverFeatures.livePreview = livePreview;
     configChanged();
     renderConfig();
     out.className = 'result ok';
-    out.textContent = `Auto-configured from ${Object.keys(OI).length} node types.\nCADS: ${cads ? 'available' : 'not installed'}.`;
+    out.textContent = `Auto-configured from ${Object.keys(OI).length} node types.\nCADS: ${cads ? 'available' : 'not installed'}.\nLive preview: ${livePreview ? `available (${pm})` : 'off (start ComfyUI with --preview-method auto)'}.`;
   } catch (e) {
     out.className = 'result error';
     out.textContent = errText(e);
@@ -2816,6 +2885,8 @@ function bindConfig() {
   $('#btnImport').addEventListener('click', doImport);
 
   $('#cfgCads').addEventListener('change', (e) => { config.serverFeatures.cads = e.target.checked; configChanged(); });
+  $('#cfgLivePreview').addEventListener('change', (e) => { config.serverFeatures.livePreview = e.target.checked; configChanged({ generate: false }); });
+  $('#cfgShowLivePreview').addEventListener('change', (e) => { config.clientPreferences.showLivePreview = e.target.checked; saveConfig(); });
   $('#cfgSaveImage').addEventListener('change', (e) => { config.serverPreferences.saveImage = e.target.checked; configChanged({ generate: false }); });
   for (const [id, key] of [['#cfgGalleryCols', 'galleryColumns'], ['#cfgGalleryRows', 'galleryRows']]) {
     $(id).addEventListener('change', (e) => { config.clientPreferences[key] = Number(e.target.value); saveConfig(); applyClientPrefs(); });

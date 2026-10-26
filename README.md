@@ -12,7 +12,7 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
 
    You can also pass a specific origin instead of `*`, e.g. `--enable-cors-header http://myhost:8080`.
 2. Open `index.html` in Firefox or Chrome/Chromium. Opening it from disk (`file://`) works, and so does any static web server.
-3. Go to **Configuration › Connection**, enter the ComfyUI URL (default `http://localhost:8188/`), then click **Save** and **Test Connection**. **Auto-Configure** detects optional server features such as CADS.
+3. Go to **Configuration › Connection**, enter the ComfyUI URL (default `http://localhost:8188/`), then click **Save** and **Test Connection**. **Auto-Configure** detects optional server features such as CADS and live preview (start ComfyUI with `--preview-method auto` to get live previews).
 4. Go back to **Generate**, write a prompt and press **Generate** (or Ctrl+Enter in the prompt box).
 
 ## Generate tab
@@ -49,7 +49,7 @@ The page remembers your Generate settings (not images) between visits.
 Configuration is stored in the browser's `localStorage` and can be moved between computers:
 
 - **Global Import & Export**: export everything as one JSON file, or import a file to replace the current configuration.
-- **Client Preferences**: number of gallery thumbnails per row (2, 3 or 4), rows shown before the thumbnails scroll (1 or 2), and the mask display color.
+- **Client Preferences**: number of gallery thumbnails per row (2, 3 or 4), rows shown before the thumbnails scroll (1 or 2), the mask display color, and whether to show the live preview in the gallery while generating.
 - **Functional Workflows**: each one has a name and model/LoRA filters (regular expressions, case-insensitive). It also has three ComfyUI workflows (txt2img, img2img, inpainting) with *mappings* that say which node input receives each Generate-tab value. Workflows can be loaded from ComfyUI's JSON (UI or API format) or from a ComfyUI PNG. **Auto-detect mappings** makes a good first guess for standard graphs.
 - **Custom Workflows**: open-ended workflows for the (upcoming) Extras tab, each with its own parameters and mappings.
 

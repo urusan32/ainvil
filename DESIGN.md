@@ -53,7 +53,7 @@ At the top of the configuration tab is the Connection section. This allows the C
 
 Next is the Global Import and Export section. Export will dump the entire current app configuration into a JSON file that is downloaded in the browser immediately. Import allows a valid JSON configuration file to be uploaded either via file picker or dragging the file into the import/export box with a button to execute the import and overwrite the current configuration. Any issues should make an error box with developer information about what happened displayed in the box. Note there are individual imports and exports for Functional/Custom Workflows later.
 
-Next is the Server Features section. This contains toggles for different features that depend on specific server support for them. Currently this just contains the CADS toggle, which depends on the comfyui-cads extension being installed on the ComfyUI server.
+Next is the Server Features section. This contains toggles for different features that depend on specific server support for them. Currently this contains the CADS toggle, which depends on the comfyui-cads extension being installed on the ComfyUI server, and the Live preview toggle, which depends on the server being started with a `--preview-method` other than `none` (Auto-Configure reads this from the server's command line in `/system_stats`).
 
 Next is the Server Preferences section which contains configuration for specific policy items that may vary from user to user. Current items are:
 * Save Image - Whether to save the image on the server or just return the image via the API unsaved. Defaults to true.
@@ -62,6 +62,7 @@ Next is the Client Preferences section, which contains display preferences for t
 * Gallery thumbnails per row - 2, 3, or 4 thumbnails per row in the Output Gallery. Defaults to 3.
 * Gallery rows before scrolling - 1 or 2 rows of thumbnails are shown before the thumbnails scroll. Defaults to 2.
 * Mask color - The color the mask is displayed in. Defaults to #ff285a, with a button to reset it to the default.
+* Show live preview - While generating, the main Output Gallery image shows the server's live preview (sent as binary WebSocket frames) instead of the first finished image; between previews it shows the newest finished image, and when generation ends it returns to the first image. Clicking a thumbnail during generation returns to normal selection for the rest of the run. Only takes effect when the Live preview server feature is on. Defaults to true.
 
 Finally, there are two collapsable workflow sections. The first one is for the main Generate Image functional workflows and the second one is for the Extras custom workflows.
 
