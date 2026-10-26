@@ -258,7 +258,7 @@ table.map td:first-child .hint { display: block; }
           <button data-profile="1024">1024</button><button data-profile="1536">1536</button><button data-custom="1">Custom</button>
         </div>
         <div class="seg" id="resRatios">
-          <button data-ratio="square">Square</button><button data-ratio="landscape">Landscape</button><button data-ratio="portrait">Portrait</button><button data-ratio="wide" title="16:9">Widescreen Landscape</button><button data-ratio="tall" title="9:16">Widescreen Portrait</button>
+          <button data-ratio="square">Square</button><button data-ratio="landscape">Landscape</button><button data-ratio="portrait">Portrait</button><button data-ratio="wide" title="Widescreen Landscape (16:9)">WS Landscape</button><button data-ratio="tall" title="Widescreen Portrait (9:16)">WS Portrait</button>
         </div>
       </div>
       <div class="grid2">
@@ -295,6 +295,7 @@ table.map td:first-child .hint { display: block; }
         <button id="btnUseSeed" title="Copy this image's seed into the Seed field">Use Seed</button>
         <button id="btnToInput" title="Load this image as the input image">Use as Input</button>
         <button id="btnToExtras" title="Add this image to the current Extras workflow's input images">Send to Extras</button>
+        <button id="btnClearGallery" title="Remove all images from the Output Gallery (the files stay on the server)">Clear</button>
       </div>
     </section>
 
@@ -350,6 +351,13 @@ table.map td:first-child .hint { display: block; }
         <label>Apply to <select data-cads="apply_to"></select></label>
         <label>Key <select data-cads="key"></select></label>
         <label>Noise type <select data-cads="noise_type"></select></label>
+        <div id="cadsSeedBox">
+          <label for="cadsSeed">Seed</label>
+          <div class="seedrow">
+            <input id="cadsSeed" type="number" min="0" max="4294967295" step="1">
+            <label class="chk" title="Use the image seed (mod 2^32) for CADS"><input type="checkbox" id="cadsSeedAuto"> Automatic</label>
+          </div>
+        </div>
       </div>
       <p class="hint" id="cadsStatus"></p>
     </section>
@@ -1488,7 +1496,7 @@ function buildPrompt(fw, mode, p) {
       const v = p.cads[k];
       if (k in n.inputs && v !== '' && v != null && !(typeof n.inputs[k] === 'number' && !Number.isFinite(Number(v)))) n.inputs[k] = typeof n.inputs[k] === 'number' ? Number(v) : v;
     }
-    if ('seed' in n.inputs) n.inputs.seed = p.seed % 2 ** 32;
+    if ('seed' in n.inputs) n.inputs.seed = p.cads.seedAuto === false ? clampInt(p.cads.seed, 0, 2 ** 32 - 1, 0) : p.seed % 2 ** 32;
   }
   if (p.batch_size > 1) for (const tg of m.batch_repeat || []) if (tg.node && tg.input) insertRepeat(a, tg, p.batch_size);
   const loraT = (m.lora || []).find((x) => x.node);
@@ -1729,6 +1737,11 @@ function renderCads() {
     if (Array.isArray(spec)) for (const a of ['min', 'max', 'step']) if (spec[1]?.[a] != null) el[a] = spec[1][a];
     if (document.activeElement !== el) el.value = gen.cads[k];
   }
+  $('#cadsSeedBox').hidden = !n || !('seed' in n.inputs);
+  gen.cads.seedAuto ??= true;
+  gen.cads.seed ??= n && typeof n.inputs.seed === 'number' ? n.inputs.seed % 2 ** 32 : 0;
+  $('#cadsSeedAuto').checked = gen.cads.seedAuto;
+  if (document.activeElement !== $('#cadsSeed')) $('#cadsSeed').value = gen.cads.seed;
   $('#cadsStatus').textContent = blocker;
 }
 
@@ -2466,6 +2479,11 @@ async function loadSettingsFromPng(file) {
     const cn = a[cadsT.node];
     gen.cads = { ...cadsDefaults(templateDefaults(fw), clampInt(gen.steps, 1, 10000, 30)), on: cn?.class_type === match.tmpl[cadsT.node].class_type };
     if (gen.cads.on) for (const k of CADS_FIELDS) if (k in cn.inputs && !Array.isArray(cn.inputs[k])) gen.cads[k] = cn.inputs[k];
+    const cs = gen.cads.on ? cn.inputs.seed : undefined;
+    if (typeof cs === 'number') {
+      gen.cads.seedAuto = cs === gen.seed % 2 ** 32;
+      if (!gen.cads.seedAuto) gen.cads.seed = cs;
+    }
   }
   const vals = (gen.custom[fw.name] ??= {});
   for (const cp of fw.customParameters || []) {
@@ -3329,6 +3347,8 @@ function bindGenerate() {
       saveGenSoon();
     });
   }
+  $('#cadsSeed').addEventListener('input', (e) => { if (e.target.value !== '') { gen.cads.seed = clampInt(e.target.value, 0, 2 ** 32 - 1, 0); saveGenSoon(); } });
+  $('#cadsSeedAuto').addEventListener('change', (e) => { gen.cads.seedAuto = e.target.checked; saveGenSoon(); });
   $('#crop').addEventListener('change', (e) => { gen.crop = e.target.checked; saveGenSoon(); });
   $('#noiseMask').addEventListener('change', (e) => { gen.noiseMask = e.target.checked; saveGenSoon(); });
 
@@ -3348,6 +3368,11 @@ function bindGenerate() {
   // gallery
   $('#btnDlSel').addEventListener('click', () => downloadSelected());
   $('#btnDlAll').addEventListener('click', () => downloadAll());
+  $('#btnClearGallery').addEventListener('click', () => {
+    if (busy) return toast('Cancel the running generation first.');
+    resetGallery();
+    renderGallery();
+  });
   $('#btnUseSeed').addEventListener('click', () => {
     const it = gallery.items[gallery.sel];
     if (!it) return;

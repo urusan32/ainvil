@@ -22,7 +22,7 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - **Clear** resets the page.
   - **Generate Workflow** downloads the ComfyUI API-format workflow for the first image instead of running it.
   - Drop a PNG made by Ainvil (or ComfyUI with the same workflow) onto the Main section to use it as a template. This loads its prompts, model, generation parameters, LoRAs and custom parameters. For img2img and inpainting it also loads the input image and mask, if they are still in the server's `input/` folder. The seed is loaded with Random turned off. A `%date:…%` filename prefix is kept as the template, not replaced by its expanded value.
-- **Generation Parameters**: resolution presets (1024 / 1536 × Square / Landscape / Portrait / Widescreen Landscape / Widescreen Portrait, or Custom; the widescreen sizes are about 16:9, in multiples of 64), seed (with a Random toggle), batch size, steps, CFG, sampler and scheduler.
+- **Generation Parameters**: resolution presets (1024 / 1536 × Square / Landscape / Portrait / WS Landscape / WS Portrait, or Custom; the widescreen (WS) sizes are about 16:9, in multiples of 64), seed (with a Random toggle), batch size, steps, CFG, sampler and scheduler.
 - **Input Image**: drop, choose or paste an image to switch to **img2img**.
   - Click the mask box to paint a mask, which switches to **inpainting**.
   - In the mask editor: `[` and `]` change the brush size, `x` toggles erase, Ctrl+Z undoes.
@@ -36,14 +36,14 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - Click the large image for a full-screen view: arrow keys browse and Esc closes. Save with the viewer's **Download** button or by right-clicking.
   - When the page is served over http(s), right-click › *Save Image As* uses the image's real filename. Opened from disk (`file://`), Firefox can only show the image as a nameless blob, so use **Download** or right-click › *Save Link As* to get the real filename.
   - **Download All** downloads the whole run as a ZIP file.
-  - **Use Seed** copies the selected image's seed into the Seed field. **Use as Input** loads the image as the input image for img2img. **Send to Extras** adds it to the current Extras workflow's images and switches to Extras.
+  - **Use Seed** copies the selected image's seed into the Seed field. **Use as Input** loads the image as the input image for img2img. **Send to Extras** adds it to the current Extras workflow's images and switches to Extras. **Clear** empties the gallery (the files stay on the server).
 - **LoRA**: add any number of LoRAs from the server, filtered to the workflow's model family, with a weight for each.
   - The search box narrows every LoRA list to names containing the words you type, and **+ Add LoRA** adds the first match.
   - The **On/Off** button keeps a LoRA in the list without using it.
 - **Custom Parameters**: extra settings defined by the selected workflow. Anima and MOSS have *Resize method* and *Filename prefix*; MOSS also has the Skip Layer Guidance settings (*Skip layer guidance* on/off, off by default, plus its layers and start/end percent).
 - **CADS** (Condition-Annealed Diffusion Sampler): adds scheduled noise to the conditioning for more varied images. It needs the [comfyui-cads](https://github.com/asagi4/ComfyUI-CADS) extension on the server and a workflow with a CADS node (the built-in Anima and MOSS workflows have one).
   - **Enable CADS** turns it on or off (off by default). When it's off, unsupported by the server (*Server Features › CADS*), or not configured for the workflow, the CADS node is bypassed and the section says why.
-  - The settings start at the workflow's CADS node values. **Total steps** follows the main Steps whenever Steps changes, but changing it doesn't change Steps. The CADS seed follows the image seed.
+  - The settings start at the workflow's CADS node values. **Total steps** follows the main Steps whenever Steps changes, but changing it doesn't change Steps. With **Automatic** checked (the default), the CADS seed follows the image seed; uncheck it to use the CADS Seed field as is.
 
 The page remembers your Generate settings (not images) between visits.
 

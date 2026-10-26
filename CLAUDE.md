@@ -37,7 +37,7 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
   - Combo options come from `cwOptions()`; the search box appears for server lists that look like files or have >12 entries.
   - Generate and Extras runs exclude each other (they share `progress` and `setProgress` drives both bars). The viewer and downloads take the image list (`gallery` or `exOut`, each with `items`, `sel`, `render`).
 - The Generate layout is 3, 2 or 1 columns. `LAYOUTS` moves the section elements between columns, and the dynamic-height sections (Custom Parameters, LoRA) sit at the bottom of their columns.
-- **CADS**: `cadsBlocker()` returns the reason it can't run: not mapped for the mode, server feature off, or no CADS class in `/object_info`. If there's none, the `gen.cads.on` master switch decides. Defaults come from the template node (`templateDefaults().cads`). A main Steps change sets `gen.cads.total_steps` (one-way). Load from PNG sets `on` from whether the CADS node is in the prompt, and a missing CADS node doesn't count against `matchPrompt`.
+- **CADS**: `cadsBlocker()` returns the reason it can't run: not mapped for the mode, server feature off, or no CADS class in `/object_info`. If there's none, the `gen.cads.on` master switch decides. Defaults come from the template node (`templateDefaults().cads`). A main Steps change sets `gen.cads.total_steps` (one-way). `gen.cads.seedAuto` (default true) uses image seed mod 2^32; otherwise `gen.cads.seed` is used as is (not in `CADS_FIELDS`). Load from PNG sets `on` from whether the CADS node is in the prompt, and a missing CADS node doesn't count against `matchPrompt`.
 
 ## Not done yet
 - Nothing tracked here at the moment.
