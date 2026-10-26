@@ -133,6 +133,7 @@ body.layout-dragging, body.layout-dragging * { cursor: grabbing !important; user
 .dropbox img, .dropbox canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .dropbox.clickable { cursor: crosshair; }
 .dropbox.wide { aspect-ratio: auto; min-height: 90px; flex-direction: column; gap: 6px; padding: 12px; text-align: center; }
+#stashDrop { min-height: 56px; cursor: pointer; flex-shrink: 0; }
 input[type=range] { width: 100%; margin-top: 10px; accent-color: var(--accent); }
 .checks { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
 .focus-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
@@ -169,7 +170,8 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 #viewer img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
 #viewer .nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; background: rgba(30,30,30,.6); color: #fff; padding: 10px 14px; }
 #viewer .prev { left: 10px; } #viewer .next { right: 10px; }
-#viewer .dl { position: absolute; top: 10px; right: 64px; padding: 6px 12px; background: rgba(30,30,30,.8); color: #fff; z-index: 2; }
+#viewer .viewer-actions { position: absolute; top: 10px; right: 64px; display: flex; gap: 6px; z-index: 2; }
+#viewer .viewer-actions button { padding: 6px 12px; background: rgba(30,30,30,.8); color: #fff; }
 #viewer a { display: contents; }
 #maskEditor, #imageEditor { flex-direction: column; align-items: stretch; justify-content: flex-start; }
 .mask-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: var(--bg2); border-bottom: 1px solid var(--line); color: var(--fg); }
@@ -358,6 +360,7 @@ table.map td:first-child .hint { display: block; }
       <div class="actions">
         <button id="btnDlSel">Download Selected</button>
         <button id="btnDlAll">Download All</button>
+        <button id="btnStashAll" title="Add all the images in the Output Gallery to the Image Stash">Add to Stash</button>
         <button id="btnUseSeed" title="Copy this image's seed into the Seed field">Use Seed</button>
         <button id="btnToInput" title="Load this image as the input image">Use as Input</button>
         <button id="btnToExtras" title="Add this image to the current Extras workflow's input images">Send to Extras</button>
@@ -375,6 +378,7 @@ table.map td:first-child .hint { display: block; }
           <div class="dropbox" id="inputBox"><span class="ph">Drop an image here</span></div>
           <div class="actions">
             <button id="btnPickImage">Choose…</button>
+            <button id="btnStashImage" title="Add the input image to the Image Stash">Add to Stash</button>
             <button id="btnClearImage">Clear</button>
           </div>
         </div>
@@ -476,6 +480,7 @@ table.map td:first-child .hint { display: block; }
       <div class="actions">
         <button id="btnExDlSel">Download Selected</button>
         <button id="btnExDlAll">Download All</button>
+        <button id="btnExStash" title="Add all the images in the Extras output to the Image Stash">Add to Stash</button>
         <button id="btnExToInput" title="Load this image as the Generate tab's input image">Use as Input</button>
       </div>
     </section>
@@ -611,6 +616,8 @@ table.map td:first-child .hint { display: block; }
       <button id="stashClose" title="Close (Esc)">×</button>
     </div>
     <div class="hint">Images you've stashed, newest first. They're kept in this browser, not on the server, until you remove them. Clear keeps the pinned ones.</div>
+    <div class="dropbox wide" id="stashDrop"><span class="ph">Drop images here, or click to choose, to add them to the stash</span></div>
+    <input type="file" id="fileStash" accept="image/*" multiple hidden>
     <div class="hist-list" id="stashList"></div>
   </div>
 </div>
@@ -618,7 +625,10 @@ table.map td:first-child .hint { display: block; }
 <!-- Full screen image viewer -->
 <div id="viewer" class="overlay" hidden>
   <button class="close" id="viewerClose" title="Close (Esc)">×</button>
-  <button class="dl" id="viewerDl" title="Download this image">Download</button>
+  <div class="viewer-actions">
+    <button id="viewerStash" title="Add this image to the Image Stash">Add to Stash</button>
+    <button id="viewerDl" title="Download this image">Download</button>
+  </div>
   <button class="nav prev" id="viewerPrev" title="Previous">‹</button>
   <a id="viewerLink"><img id="viewerImg" alt="Generated image"></a>
   <button class="nav next" id="viewerNext" title="Next">›</button>
@@ -2232,6 +2242,7 @@ function openViewer(g, i) {
   img.onerror = () => { img.onerror = null; if (it.src !== it.url) img.src = it.src; };
   img.src = it.url;
   Object.assign($('#viewerLink'), { href: it.src, download: it.filename });
+  $('#viewerStash').hidden = g === stash;
   $('#viewer').hidden = false;
   g.render();
 }
@@ -2463,7 +2474,7 @@ async function runGenerate() {
       if (cancelRequested) break;
       const prompt = buildPrompt(fw, mode, collectParams(mode, seeds[i], up));
       const r = await api.queuePrompt(prompt);
-      activeJobs.push({ id: r.prompt_id, seed: seeds[i] });
+      activeJobs.push({ id: r.prompt_id, seed: seeds[i], meta: promptMeta(prompt, r.number) });
       progress.promptIds.add(r.prompt_id);
       setStatus(`Queued ${i + 1} / ${count}`);
     }
@@ -2477,7 +2488,7 @@ async function runGenerate() {
       const slotMap = fw.workflows[mode].mappings || {};
       const ids = (slotMap.output || []).map((x) => x.node).filter((id) => outputs[id]);
       const imgs = (ids.length ? ids : Object.keys(outputs)).flatMap((id) => outputs[id]?.images || []);
-      for (const [bi, im] of imgs.entries()) gallery.items.push(await galleryItem(im, job.seed, bi));
+      for (const [bi, im] of imgs.entries()) gallery.items.push({ ...(await galleryItem(im, job.seed, bi)), ...job.meta });
       renderGallery();
     }
     setStatus(cancelRequested ? 'Cancelled.' : `Done — ${gallery.items.length} image(s), ${mode}.`, cancelRequested ? '' : 'ok');
@@ -2967,12 +2978,8 @@ async function loadHistory() {
   list.replaceChildren(...(entries.length ? entries.map(historyRow) : [h('div', { class: 'placeholder' }, 'The server has no history yet.')]));
 }
 
-function historyEntry(id, e) {
-  const [number, , a, extra] = e.prompt || [];
-  const st = e.status || {}, msgs = st.messages || [];
-  const msg = (type) => msgs.find((x) => x[0] === type)?.[1];
-  const start = msg('execution_start')?.timestamp;
-  const end = (msg('execution_success') || msg('execution_error') || msg('execution_interrupted'))?.timestamp;
+// What the history and the stash show about an API-format prompt.
+function promptInfo(a) {
   const isApi = isApiWorkflow(a);
   let match = null;
   try { if (isApi) match = matchPrompt(a); } catch { /* shown as another workflow */ }
@@ -2980,8 +2987,22 @@ function historyEntry(id, e) {
   const val = (k) => (match ? promptValue(a, m, k) : undefined);
   // For workflows we don't know, the first text input is usually the prompt.
   const text = val('prompt') ?? (isApi ? Object.values(a).map((n) => n?.inputs?.text).find((t) => typeof t === 'string' && t) : undefined);
+  return { a: isApi ? a : null, match, text, seed: val('seed'), model: val('model') };
+}
+// The stash metadata for the images of a prompt we queued (the seed comes from the job).
+function promptMeta(prompt, number) {
+  const { a, text, model } = promptInfo(prompt);
+  return { a, text, model, number: Number(number) || 0, time: Date.now() };
+}
+
+function historyEntry(id, e) {
+  const [number, , a, extra] = e.prompt || [];
+  const st = e.status || {}, msgs = st.messages || [];
+  const msg = (type) => msgs.find((x) => x[0] === type)?.[1];
+  const start = msg('execution_start')?.timestamp;
+  const end = (msg('execution_success') || msg('execution_error') || msg('execution_interrupted'))?.timestamp;
   return {
-    id, number: Number(number) || 0, a: isApi ? a : null, match, text, seed: val('seed'), model: val('model'),
+    id, number: Number(number) || 0, ...promptInfo(a),
     time: extra?.create_time ?? start, secs: start && end ? (end - start) / 1000 : null, mine: extra?.client_id === clientId,
     status: msg('execution_interrupted') ? 'interrupted' : st.status_str || (st.completed ? 'success' : 'unknown'),
     err: msg('execution_error'),
@@ -3043,20 +3064,47 @@ function historyRow(en) {
 async function historyToGallery(en) {
   if (busy) return toast('Cancel the running generation first.');
   const first = gallery.items.length;
-  for (const [bi, im] of en.images.entries()) gallery.items.push(await galleryItem(im, en.seed, bi));
+  const { a, text, model, number, time } = en;
+  for (const [bi, im] of en.images.entries()) gallery.items.push({ ...(await galleryItem(im, en.seed, bi)), a, text, model, number, time });
   gallery.sel = first;
   renderGallery();
   toast(`Added ${en.images.length} image(s) from #${en.number} to the Output Gallery`);
 }
 
 async function historyToStash(en, items) {
+  const { seed, number, time, text, model, a } = en;
+  if (await stashItems(items.map((it, batchIndex) => ({ ...it, seed, batchIndex, number, time, text, model, a }))))
+    toast(`Added ${items.length} image(s) from #${en.number} to the Image Stash`);
+}
+
+// Stashes gallery-like items (Output Gallery, Extras, history) with their metadata. Returns false on failure.
+async function stashItems(items) {
   try {
-    // Last first, so the batch reads in order from the top.
-    for (const [bi, it] of [...items.entries()].reverse()) {
-      await stashAdd(await itemBlob(it), { filename: it.filename, seed: en.seed, batchIndex: bi, number: en.number, time: en.time, text: en.text, model: en.model, a: en.a });
+    // Last first, so a batch reads in order from the top.
+    for (const it of [...items].reverse()) {
+      const { filename, seed, batchIndex, number, time, text, model, a } = it;
+      await stashAdd(await itemBlob(it), { filename, seed, batchIndex, number, time, text, model, a });
     }
-  } catch (e) { return toast('Could not stash the images: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); }
-  toast(`Added ${items.length} image(s) from #${en.number} to the Image Stash`);
+    return true;
+  } catch (e) {
+    toast('Could not stash the images: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error');
+    return false;
+  }
+}
+async function stashAll(g) {
+  if (!g.items.length) return toast('No images to stash');
+  if (await stashItems(g.items)) toast(`Added ${g.items.length} image(s) to the Image Stash`);
+}
+// A file dropped on (or chosen in) the stash dialog.
+async function stashFile(f) {
+  if (!f.type.startsWith('image/')) return toast(`${f.name} is not an image.`, 'error');
+  try { await stashAdd(f, { filename: f.name }); }
+  catch (e) { toast('Could not stash the image: ' + errText(e), 'error'); }
+}
+async function stashSelected(g) {
+  const it = g.items[g.sel];
+  if (!it) return toast('No image selected');
+  if (await stashItems([it])) toast('Added the image to the Image Stash');
 }
 
 // Loads a gallery-like item (Output Gallery, history, stash) as the Generate input image.
@@ -3933,7 +3981,7 @@ async function runExtras() {
       const p = await exRunParams(prep, i);
       const prompt = buildCustomPrompt(prep.cw, p);
       const r = await api.queuePrompt(prompt);
-      exJobs.push({ id: r.prompt_id, input: p.vars.input, outIds: outputNodeIds(prompt, {}) });
+      exJobs.push({ id: r.prompt_id, input: p.vars.input, outIds: outputNodeIds(prompt, {}), meta: promptMeta(prompt, r.number) });
       progress.promptIds.add(r.prompt_id);
       setExStatus(`Queued ${i + 1} / ${prep.count}`);
     }
@@ -3945,7 +3993,7 @@ async function runExtras() {
       job.done = true;
       const ids = job.outIds.filter((id) => outputs[id]);
       const imgs = (ids.length ? ids : Object.keys(outputs)).flatMap((id) => outputs[id]?.images || []);
-      for (const im of imgs) exOut.items.push({ ...(await galleryItem(im)), input: job.input });
+      for (const im of imgs) exOut.items.push({ ...(await galleryItem(im)), ...job.meta, input: job.input });
       renderExGallery();
     }
     setExStatus(exCancel ? 'Cancelled.' : `Done — ${exOut.items.length} image(s).`, exCancel ? '' : 'ok');
@@ -4629,6 +4677,7 @@ function bindGenerate() {
   // gallery
   $('#btnDlSel').addEventListener('click', () => downloadSelected());
   $('#btnDlAll').addEventListener('click', () => downloadAll());
+  $('#btnStashAll').addEventListener('click', () => stashAll(gallery));
   $('#btnClearGallery').addEventListener('click', () => {
     if (busy) return toast('Cancel the running generation first.');
     resetGallery();
@@ -4669,9 +4718,13 @@ function bindGenerate() {
   $('#stashClear').addEventListener('click', () => clearStash(false));
   $('#stashClearAll').addEventListener('click', () => { if (confirm('Remove every image from the Image Stash, including the pinned ones?')) clearStash(true); });
   $('#stashClose').addEventListener('click', closeStash);
+  makeDropZone($('#stashDrop'), stashFile, { multiple: true });
+  $('#stashDrop').addEventListener('click', () => $('#fileStash').click());
+  $('#fileStash').addEventListener('change', async (e) => { for (const f of e.target.files) await stashFile(f); e.target.value = ''; });
   $('#stashDlg').addEventListener('click', (e) => { if (e.target.id === 'stashDlg') closeStash(); });
   $('#viewerClose').addEventListener('click', closeViewer);
   $('#viewerDl').addEventListener('click', () => downloadSelected(viewing));
+  $('#viewerStash').addEventListener('click', () => stashSelected(viewing));
   $('#viewerLink').addEventListener('click', (e) => e.preventDefault());
   $('#viewerPrev').addEventListener('click', () => stepViewer(-1));
   $('#viewerNext').addEventListener('click', () => stepViewer(1));
@@ -4685,6 +4738,11 @@ function bindGenerate() {
   $('#btnPickImage').addEventListener('click', () => $('#fileImage').click());
   $('#fileImage').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) setInputImage(f, f.name); e.target.value = ''; });
   $('#btnClearImage').addEventListener('click', clearInputImage);
+  $('#btnStashImage').addEventListener('click', async () => {
+    if (!input.blob) return toast('No input image to stash.');
+    try { await stashAdd(input.blob, { filename: input.name }); toast('Added the input image to the Image Stash'); }
+    catch (e) { toast('Could not stash the image: ' + errText(e), 'error'); }
+  });
   makeDropZone($('#maskBox'), loadMaskFile);
   $('#maskBox').addEventListener('click', openMaskEditor);
   $('#btnUpMask').addEventListener('click', () => { if (!input.img) return toast('Load an input image first.'); $('#fileMask').click(); });
@@ -4787,6 +4845,7 @@ function bindExtras() {
   $('#btnExWorkflow').addEventListener('click', extrasWorkflowFile);
   $('#btnExDlSel').addEventListener('click', () => downloadSelected(exOut));
   $('#btnExDlAll').addEventListener('click', () => downloadAll(exOut, 'ainvil-extras'));
+  $('#btnExStash').addEventListener('click', () => stashAll(exOut));
   $('#btnExToInput').addEventListener('click', async () => {
     const it = exOut.items[exOut.sel];
     if (it && await itemToInput(it)) showTab('generate');
