@@ -1,6 +1,6 @@
 # Ainvil
 
-Ainvil is a single-page web app for common image generation workflows with ComfyUI: txt2img, img2img, and inpainting, plus LoRAs, batches, and a mask painter. Everything is in one `index.html` file. There's nothing to install or build.
+Ainvil is a single-page web app for common image generation workflows with ComfyUI: txt2img, img2img, and inpainting, plus LoRAs, batches, a mask painter, and an Extras tab for other workflows such as upscaling. Everything is in one `index.html` file. There's nothing to install or build.
 
 ## Quick start
 
@@ -47,6 +47,23 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
 
 The page remembers your Generate settings (not images) between visits.
 
+## Extras tab
+
+Runs a *custom workflow*: any ComfyUI workflow with parameters you define in *Configuration › Custom Workflows*. Pick the workflow, fill in its parameters and press **Run**. **Generate Workflow** downloads the API-format workflow for the first image instead, and **Clear** resets the parameters and removes the images.
+
+- **Image** parameters take one or more images: drop them, choose them, or paste one. With several images the workflow runs once per image (a batch conversion), each as its own queue entry. Remove an image with its ✕.
+- Combo parameters list the options from the server. Lists of files, such as models, also get a **Search** box.
+- **Output** shows the results like the Output Gallery, with the input image name and output size. Click for the full-screen viewer, or use **Download Selected** / **Download All** (ZIP).
+
+The built-in **Upscale with model** workflow upscales with an upscale model, then resizes to a target size:
+
+- **Upscale model**: the model's fixed factor (2x, 4x, …; the model name usually says which) is applied first.
+- **Width** / **Height**: the final size. Set one of them to 0 to keep the image's aspect ratio, which is what you want for a batch of differently shaped images.
+- **Resize method** and **Crop** (`center` crops to the target aspect ratio instead of stretching).
+- **Filename prefix**: `%input%` is replaced by the input image name, so batch outputs keep their names.
+
+The Extras settings are remembered between visits, the images are not.
+
 ## Configuration
 
 Configuration is stored in the browser's `localStorage` and can be moved between computers:
@@ -54,7 +71,7 @@ Configuration is stored in the browser's `localStorage` and can be moved between
 - **Global Import & Export**: export everything as one JSON file, or import a file to replace the current configuration.
 - **Client Preferences**: number of gallery thumbnails per row (2, 3 or 4), rows shown before the thumbnails scroll (1 or 2), the mask display color, and whether to show the live preview in the gallery while generating.
 - **Functional Workflows**: each one has a name and model/LoRA filters (regular expressions, case-insensitive). It also has three ComfyUI workflows (txt2img, img2img, inpainting) with *mappings* that say which node input receives each Generate-tab value. Workflows can be loaded from ComfyUI's JSON (UI or API format) or from a ComfyUI PNG. **Auto-detect mappings** makes a good first guess for standard graphs.
-- **Custom Workflows**: open-ended workflows for the (upcoming) Extras tab, each with its own parameters and mappings.
+- **Custom Workflows**: open-ended workflows for the Extras tab. Each has a ComfyUI workflow and a list of parameters, each with a name, a type (int, float, string, text, boolean, combo or image), a default, and the node input(s) it sets. An empty default uses the value in the workflow. Combos can have a regex filter (like the model filter), and any parameter can have help text, shown under it in Extras. **+ Built-in examples** adds back the built-in custom workflows (Upscale with model) if they are missing.
 
 Each workflow can be exported and imported on its own. All exported files carry `"version": 1`.
 
@@ -65,7 +82,7 @@ Each workflow can be exported and imported on its own. All exported files carry 
 - **Output image**: Save Image nodes become Preview Image nodes when *Server Preferences › Save Image* is off.
 - **CADS**: the CADS node, set from the CADS section. When CADS is off it is removed and its model input is passed straight through. Leave it unmapped for workflows without CADS.
 - **Inpainting**: the mask is sent as the input image's alpha channel (via ComfyUI's `/upload/mask`), so the Load Image node's MASK output carries it.
-- **Filename prefixes**: `%date:yyyyMMdd%` and `%Node title.widget%` are expanded by Ainvil, the same way the ComfyUI frontend does it.
+- **Filename prefixes**: `%date:yyyyMMdd%` and `%Node title.widget%` are expanded by Ainvil, the same way the ComfyUI frontend does it. In custom workflows, `%input%` is the input image name.
 
 ## Troubleshooting
 
@@ -75,7 +92,7 @@ Each workflow can be exported and imported on its own. All exported files carry 
 
 ## Development
 
-The default Anima workflows live in `workflows/` (`*-minworkflow-cads.json`; the plain `*-minworkflow.json` files are the same graphs without CADS) and are embedded into `index.html`. The MOSS workflows (`moss-*-minworkflow-cads.json`) are derived from the Anima ones. After editing them, run:
+The default Anima workflows live in `workflows/` (`*-minworkflow-cads.json`; the plain `*-minworkflow.json` files are the same graphs without CADS) and are embedded into `index.html`. The MOSS workflows (`moss-*-minworkflow-cads.json`) are derived from the Anima ones. The Upscale with model custom workflow is `workflows/upscale_with_model.json`. After editing them, run:
 
 ```sh
 python3 tools/make-moss-workflows.py   # after changing the Anima workflows

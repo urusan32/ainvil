@@ -6,6 +6,7 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 - Everything is in `index.html`: CSS, markup, and one inline `<script>`. There's no build step and no dependencies. Ask the user before adding any.
 - The default workflows (ComfyUI **UI format**) sit in `<script type="application/json" id="default-workflows">` as `{Anima: {mode: wf}, MOSS: {…}}`. They're generated from `workflows/{,moss-}*-minworkflow-cads.json` by `tools/embed-workflows.py`, so don't hand-edit that blob. The plain `*-minworkflow.json` files are the Anima graphs without the CADS node (handy for testing the "not configured" path).
 - The MOSS workflows are made from the Anima ones by `tools/make-moss-workflows.py`, which keeps the node ids, so both use `defaultFw()`'s mappings. MOSS adds Skip Layer Guidance: #64 `SkipLayerGuidanceDiTSimple` and #65 `ComfySwitchNode` (LoRA chain vs. SLG → CADS), driven by custom parameters. `workflows/image_moss_image_t2i.json` is ComfyUI's original MOSS template (subgraph, not used directly).
+- The default custom workflow (Extras) "Upscale with model" is `workflows/upscale_with_model.json`, embedded by the same script into `<script type="application/json" id="default-custom-workflows">` as `{upscale_with_model: wf}`. Its parameters are in `defaultUpscaleCw()` (node ids #2 LoadImage, #9 UpscaleModelLoader, #11 ImageScale, #5 SaveImage).
 - The app default is `http://localhost:8188/`.
 
 ## Key design decisions
@@ -29,12 +30,17 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 - The full-screen viewer tries the direct `/view` URL first, because ComfyUI's `Content-Disposition` filename then names "Save Image As". From `file://`, Firefox refuses it, so the viewer falls back to the blob URL inside an `<a download>` link.
 - **Load from PNG** (drop on `#sec-main`, `loadSettingsFromPng`): reads the API `prompt` chunk, then `matchPrompt()` picks the fw/mode whose template nodes match by id + class. LoRA clones, RepeatLatentBatch and SaveImage↔PreviewImage don't count against the match. Values are read back through the mappings. For our inpainting uploads (`ainvil_<hash>_m<mh>.png`), the RGB comes from the original `ainvil_<hash>.*` (alpha premultiplication again), and the mask is `255 - alpha` of the `_m` file. Custom values that are just the expansion of a `%…%` template are not loaded.
 - Model/LoRA **search** (`searchList`, plain words, AND) runs on top of the workflow's regex filter (`filterList`).
-- Config schema version is `CONFIG_VERSION = 1`; keep it at 1 during alpha. localStorage keys: `ainvil.config`, `ainvil.generate` (form state), `ainvil.tab`.
+- Config schema version is `CONFIG_VERSION = 1`; keep it at 1 during alpha. localStorage keys: `ainvil.config`, `ainvil.generate` (form state), `ainvil.extras` (Extras state: `{cwName, values}`), `ainvil.tab`.
+- **Custom workflows / Extras**: parameters are `{name, type, default, options, filter?, hint?, min/max/step, mappings: [targets]}` (one flat target list, no modes). Types are `CW_PARAM_TYPES` = `PARAM_TYPES` + `image`; `image` is only allowed for custom workflows (`normalizeParam`'s `perMode` = functional).
+  - `buildCustomPrompt()` sets the values; an unset value or empty default falls back to `cwDefault()` (the mapped input's workflow value). It expands filename prefixes with `vars` (`%input%`) and swaps SaveImage→PreviewImage when saveImage is off (`saveToPreview`).
+  - Image params: images live in `exImages[cw][param]` (not saved), are uploaded with `uploadCached()` (same hash names/cache as Generate). Several images = one queued prompt per image (`exPrepare`/`exRunParams`); a single-image param is reused, mismatched counts are an error.
+  - Combo options come from `cwOptions()`; the search box appears for server lists that look like files or have >12 entries.
+  - Generate and Extras runs exclude each other (they share `progress` and `setProgress` drives both bars). The viewer and downloads take the image list (`gallery` or `exOut`, each with `items`, `sel`, `render`).
 - The Generate layout is 3, 2 or 1 columns. `LAYOUTS` moves the section elements between columns, and the dynamic-height sections (Custom Parameters, LoRA) sit at the bottom of their columns.
 - **CADS**: `cadsBlocker()` returns the reason it can't run: not mapped for the mode, server feature off, or no CADS class in `/object_info`. If there's none, the `gen.cads.on` master switch decides. Defaults come from the template node (`templateDefaults().cads`). A main Steps change sets `gen.cads.total_steps` (one-way). Load from PNG sets `on` from whether the CADS node is in the prompt, and a missing CADS node doesn't count against `matchPrompt`.
 
 ## Not done yet
-- Extras tab UI (custom workflows can be configured but not run).
+- Nothing tracked here at the moment.
 
 ## Testing
 Headless Firefox driven over Marionette (raw socket, Python stdlib) works well for end-to-end checks against the test server.

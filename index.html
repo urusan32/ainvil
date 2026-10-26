@@ -129,6 +129,14 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 .lora-search { margin-bottom: 8px; }
 .lora-empty { color: var(--muted); font-size: 13px; }
 .custom-params { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.custom-params .full { grid-column: 1 / -1; }
+.custom-params .hint { display: block; margin-top: 2px; }
+.extras-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; max-width: 1600px; margin: 0 auto; }
+.imglist { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; max-height: 260px; overflow-y: auto; margin-top: 6px; }
+.imglist:empty { display: none; }
+.imglist .im { position: relative; }
+.imglist img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; display: block; background: var(--input); }
+.imglist .im button { position: absolute; top: 2px; right: 2px; padding: 0 6px; font-size: 12px; background: rgba(20,20,20,.75); color: #fff; border: none; }
 #cadsFields.off { opacity: .45; }
 #cadsStatus:empty { display: none; }
 
@@ -182,6 +190,7 @@ table.map td:first-child .hint { display: block; }
 .toast { background: var(--bg2); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 10px 12px; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.3); font-size: 13px; white-space: pre-wrap; word-break: break-word; }
 .toast.error { border-left-color: var(--err); } .toast.ok { border-left-color: var(--ok); }
 
+@media (max-width: 899px) { .extras-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) {
   main { padding: 10px 8px 40px; }
   .topbar { padding: 8px; gap: 8px; }
@@ -355,11 +364,29 @@ table.map td:first-child .hint { display: block; }
 
 <!-- ============================== EXTRAS ============================== -->
 <section id="tab-extras" class="tabpanel">
-  <div class="config-wrap">
-    <section class="card">
-      <h2>Extras</h2>
-      <p>This tab will run open-ended custom workflows (upscaling in particular). It is empty pending further design.</p>
-      <p class="hint">Custom workflows can already be configured, imported and exported in the Configuration tab.</p>
+  <div class="extras-grid">
+    <section class="card" id="ex-main">
+      <h2>Custom Workflow</h2>
+      <label>Workflow <select id="cwSelect"></select></label>
+      <div id="exParams" class="custom-params stack"></div>
+      <div class="actions">
+        <button id="btnExRun" class="primary big">Run</button>
+        <button id="btnExCancel" class="danger" hidden>Cancel</button>
+        <button id="btnExClear" title="Reset the parameters to their defaults and remove the images">Clear</button>
+        <button id="btnExWorkflow" title="Download the ComfyUI API workflow for the first image instead of running it">Generate Workflow</button>
+      </div>
+      <div class="progress"><div id="exProgressBar"></div></div>
+      <div id="exStatus" class="status"></div>
+    </section>
+    <section class="card" id="ex-gallery">
+      <h2>Output</h2>
+      <div class="gallery-main" id="exGalleryMain"><div class="placeholder">No images yet</div></div>
+      <div class="gallery-info" id="exGalleryInfo"></div>
+      <div class="thumbs-wrap"><div class="thumbs" id="exThumbs"></div></div>
+      <div class="actions">
+        <button id="btnExDlSel">Download Selected</button>
+        <button id="btnExDlAll">Download All</button>
+      </div>
     </section>
   </div>
 </section>
@@ -446,7 +473,9 @@ table.map td:first-child .hint { display: block; }
       <div class="actions">
         <button id="btnImportCw">Import custom workflow…</button>
         <button id="btnAddCw">+ New custom workflow</button>
+        <button id="btnCwDefaults" title="Add the built-in custom workflows (e.g. Upscale with model) that aren't configured">+ Built-in examples</button>
       </div>
+      <p class="hint">Custom workflows run in the Extras tab. Each parameter has a name, a type and the workflow input(s) it sets. An <i>image</i> parameter uploads the images added in Extras (several images = one run each). <code>%input%</code> in a filename prefix is the input image's name.</p>
       <pre id="cwImportError" class="errorbox" hidden></pre>
       <div id="cwList"></div>
     </details>
@@ -487,6 +516,8 @@ table.map td:first-child .hint { display: block; }
      Regenerate with: python3 tools/embed-workflows.py -->
 <script type="application/json" id="default-workflows">{"Anima":{"txt2img":{"id":"be9448fc-ae4f-4a13-8eda-0b56fd566400","revision":0,"last_node_id":63,"last_link_id":189,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen_3_06b_base.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/qwen_3_06b_base.safetensors","stable_diffusion","default"],"widgets_values_named":{"clip_name":"models/anima/qwen_3_06b_base.safetensors","type":"stable_diffusion","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":9,"mode":0,"inputs":[{"name":"samples","type":"LATENT","link":10},{"name":"vae","type":"VAE","link":11}],"outputs":[{"name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":1,"mode":0,"inputs":[],"outputs":[{"name":"VAE","type":"VAE","links":[11]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"qwen_image_vae.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/qwen/qwen_image_vae.safetensors"],"widgets_values_named":{"vae_name":"models/qwen/qwen_image_vae.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":2,"mode":0,"inputs":[],"outputs":[{"name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"anima-preview.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/anima_baseV10.safetensors","default"],"widgets_values_named":{"unet_name":"models/anima/anima_baseV10.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":81}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[187]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":80}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[186]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":6,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":83}],"outputs":[{"name":"MODEL","type":"MODEL","links":[188]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["models/anima/oatd-AB10-01.safetensors",1],"widgets_values_named":{"lora_name":"models/anima/oatd-AB10-01.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":8,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":189},{"name":"positive","type":"CONDITIONING","link":186},{"name":"negative","type":"CONDITIONING","link":187},{"name":"latent_image","type":"LATENT","link":176}],"outputs":[{"name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",30,4,"euler_ancestral","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":30,"cfg":4,"sampler_name":"euler_ancestral","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":10,"mode":0,"inputs":[{"name":"images","type":"IMAGE","link":82}],"outputs":[{"name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"}},{"id":28,"type":"EmptyLatentImage","pos":[711.2040958030439,323.49853495656214],"size":[307.59114583333337,106],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[{"name":"LATENT","type":"LATENT","links":[176]}],"properties":{"Node name for S&R":"EmptyLatentImage","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1024,1024,1],"widgets_values_named":{"width":1024,"height":1024,"batch_size":1}},{"id":63,"type":"CADS","pos":[707.3550777298739,-269.9005590778716],"size":[270,298],"flags":{},"order":7,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":188}],"outputs":[{"name":"MODEL","type":"MODEL","links":[189]}],"properties":{"Node name for S&R":"CADS","cnr_id":"comfyui-cads","ver":"1.1.0"},"widgets_values":[0.1,0.6,0.9,0.5,5,30,"both","both","normal",1094014663,"randomize"],"widgets_values_named":{"noise_scale":0.1,"t1":0.6,"t2":0.9,"rescale":0.5,"start_step":5,"total_steps":30,"apply_to":"both","key":"both","noise_type":"normal","seed":1094014663,"control_after_generate":"randomize"}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[176,28,0,19,3,"LATENT"],[186,11,0,19,1,"CONDITIONING"],[187,12,0,19,2,"CONDITIONING"],[188,49,0,63,0,"MODEL"],[189,63,0,19,0,"MODEL"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.7947449170740577,"offset":[664.1541657805558,598.3078183037634]},"frontendVersion":"1.55.18","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4},"img2img":{"id":"6021eab4-33b8-4699-9538-e6909073f38a","revision":0,"last_node_id":64,"last_link_id":191,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen_3_06b_base.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/qwen_3_06b_base.safetensors","stable_diffusion","default"],"widgets_values_named":{"clip_name":"models/anima/qwen_3_06b_base.safetensors","type":"stable_diffusion","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":11,"mode":0,"inputs":[{"name":"samples","type":"LATENT","link":10},{"name":"vae","type":"VAE","link":11}],"outputs":[{"name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":53,"type":"ImageScale","pos":[743.4037482562973,565.2220989113353],"size":[270,130],"flags":{},"order":6,"mode":0,"inputs":[{"name":"image","type":"IMAGE","link":163}],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[174]}],"properties":{"Node name for S&R":"ImageScale","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":["lanczos",1024,1024,"disabled"],"widgets_values_named":{"upscale_method":"lanczos","width":1024,"height":1024,"crop":"disabled"}},{"id":51,"type":"LoadImage","pos":[724.5253536266969,749.4620387119438],"size":[282.7333297729492,314.0000000000001],"flags":{},"order":1,"mode":0,"inputs":[],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[163]},{"name":"MASK","type":"MASK","links":[]}],"properties":{"Node name for S&R":"LoadImage","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["example.png","image"],"widgets_values_named":{"image":"example.png","upload":"image"}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":2,"mode":0,"inputs":[],"outputs":[{"name":"VAE","type":"VAE","links":[11,89]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"qwen_image_vae.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/qwen/qwen_image_vae.safetensors"],"widgets_values_named":{"vae_name":"models/qwen/qwen_image_vae.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[{"name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"anima-preview.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/anima_baseV10.safetensors","default"],"widgets_values_named":{"unet_name":"models/anima/anima_baseV10.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":81}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[188]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":80}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[187]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":7,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":83}],"outputs":[{"name":"MODEL","type":"MODEL","links":[190]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["models/anima/oatd-AB10-01.safetensors",1],"widgets_values_named":{"lora_name":"models/anima/oatd-AB10-01.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":10,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":191},{"name":"positive","type":"CONDITIONING","link":187},{"name":"negative","type":"CONDITIONING","link":188},{"name":"latent_image","type":"LATENT","link":186}],"outputs":[{"name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",30,4,"euler_ancestral","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":30,"cfg":4,"sampler_name":"euler_ancestral","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":12,"mode":0,"inputs":[{"name":"images","type":"IMAGE","link":82}],"outputs":[{"name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"}},{"id":52,"type":"VAEEncode","pos":[882.1358965920655,473.63455299354797],"size":[140,46],"flags":{},"order":8,"mode":0,"inputs":[{"name":"pixels","type":"IMAGE","link":174},{"name":"vae","type":"VAE","link":89}],"outputs":[{"name":"LATENT","type":"LATENT","links":[186]}],"properties":{"Node name for S&R":"VAEEncode","cnr_id":"comfy-core","ver":"0.13.0"}},{"id":63,"type":"CADS","pos":[706.0968123688552,-367.4161245568241],"size":[270,298],"flags":{},"order":9,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":190}],"outputs":[{"name":"MODEL","type":"MODEL","links":[191]}],"properties":{"Node name for S&R":"CADS","cnr_id":"comfyui-cads","ver":"1.1.0"},"widgets_values":[0.1,0.6,0.9,0.5,5,30,"both","both","normal",1094014663,"randomize"],"widgets_values_named":{"noise_scale":0.1,"t1":0.6,"t2":0.9,"rescale":0.5,"start_step":5,"total_steps":30,"apply_to":"both","key":"both","noise_type":"normal","seed":1094014663,"control_after_generate":"randomize"}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[89,15,0,52,1,"VAE"],[163,51,0,53,0,"IMAGE"],[174,53,0,52,0,"IMAGE"],[186,52,0,19,3,"LATENT"],[187,11,0,19,1,"CONDITIONING"],[188,12,0,19,2,"CONDITIONING"],[190,49,0,63,0,"MODEL"],[191,63,0,19,0,"MODEL"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.7947449170740577,"offset":[631.4392663940685,634.1683810927975]},"frontendVersion":"1.55.18","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4},"inpainting":{"id":"ab424945-0e19-4441-907e-1bcaa85e2d1f","revision":0,"last_node_id":63,"last_link_id":188,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen_3_06b_base.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/qwen_3_06b_base.safetensors","stable_diffusion","default"],"widgets_values_named":{"clip_name":"models/anima/qwen_3_06b_base.safetensors","type":"stable_diffusion","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":11,"mode":0,"inputs":[{"name":"samples","type":"LATENT","link":10},{"name":"vae","type":"VAE","link":11}],"outputs":[{"name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":53,"type":"ImageScale","pos":[743.4037482562973,565.2220989113353],"size":[270,130],"flags":{},"order":6,"mode":0,"inputs":[{"name":"image","type":"IMAGE","link":163}],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[164]}],"properties":{"Node name for S&R":"ImageScale","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":["lanczos",1024,1024,"disabled"],"widgets_values_named":{"upscale_method":"lanczos","width":1024,"height":1024,"crop":"disabled"}},{"id":51,"type":"LoadImage","pos":[724.5253536266969,749.4620387119438],"size":[282.7333297729492,314.0000000000001],"flags":{},"order":1,"mode":0,"inputs":[],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[163]},{"name":"MASK","type":"MASK","links":[161]}],"properties":{"Node name for S&R":"LoadImage","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["example.png","image"],"widgets_values_named":{"image":"example.png","upload":"image"}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":2,"mode":0,"inputs":[],"outputs":[{"name":"VAE","type":"VAE","links":[11,165]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"qwen_image_vae.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/qwen/qwen_image_vae.safetensors"],"widgets_values_named":{"vae_name":"models/qwen/qwen_image_vae.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[{"name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"anima-preview.safetensors","url":"https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/anima/anima_baseV10.safetensors","default"],"widgets_values_named":{"unet_name":"models/anima/anima_baseV10.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":81}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[158]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":80}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[171]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":7,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":83}],"outputs":[{"name":"MODEL","type":"MODEL","links":[187]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["models/anima/oatd-AB10-01.safetensors",1],"widgets_values_named":{"lora_name":"models/anima/oatd-AB10-01.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":10,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":188},{"name":"positive","type":"CONDITIONING","link":172},{"name":"negative","type":"CONDITIONING","link":173},{"name":"latent_image","type":"LATENT","link":186}],"outputs":[{"name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",30,4,"euler_ancestral","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":30,"cfg":4,"sampler_name":"euler_ancestral","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":12,"mode":0,"inputs":[{"name":"images","type":"IMAGE","link":82}],"outputs":[{"name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/Anima_%date:yyyyMMdd%"}},{"id":60,"type":"InpaintModelConditioning","pos":[743.558142409847,134.55623550833846],"size":[270,138],"flags":{},"order":8,"mode":0,"inputs":[{"name":"positive","type":"CONDITIONING","link":171},{"name":"negative","type":"CONDITIONING","link":158},{"name":"vae","type":"VAE","link":165},{"name":"pixels","type":"IMAGE","link":164},{"name":"mask","type":"MASK","link":161}],"outputs":[{"name":"positive","type":"CONDITIONING","links":[172]},{"name":"negative","type":"CONDITIONING","links":[173]},{"name":"latent","type":"LATENT","links":[186]}],"properties":{"Node name for S&R":"InpaintModelConditioning","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":[true],"widgets_values_named":{"noise_mask":true}},{"id":63,"type":"CADS","pos":[718.6794659790431,-358.60826702969285],"size":[270,298],"flags":{},"order":9,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":187}],"outputs":[{"name":"MODEL","type":"MODEL","links":[188]}],"properties":{"Node name for S&R":"CADS","cnr_id":"comfyui-cads","ver":"1.1.0"},"widgets_values":[0.1,0.6,0.9,0.5,5,30,"both","both","normal",1094014663,"randomize"],"widgets_values_named":{"noise_scale":0.1,"t1":0.6,"t2":0.9,"rescale":0.5,"start_step":5,"total_steps":30,"apply_to":"both","key":"both","noise_type":"normal","seed":1094014663,"control_after_generate":"randomize"}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[158,12,0,60,1,"CONDITIONING"],[161,51,1,60,4,"MASK"],[163,51,0,53,0,"IMAGE"],[164,53,0,60,3,"IMAGE"],[165,15,0,60,2,"VAE"],[171,11,0,60,0,"CONDITIONING"],[172,60,0,19,1,"CONDITIONING"],[173,60,1,19,2,"CONDITIONING"],[186,60,2,19,3,"LATENT"],[187,49,0,63,0,"MODEL"],[188,63,0,19,0,"MODEL"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.8742194087814635,"offset":[617.1407963824913,747.2978758243913]},"frontendVersion":"1.55.18","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4}},"MOSS":{"txt2img":{"id":"3b09fd31-ca3d-4099-a390-78d6c3d53b16","revision":0,"last_node_id":65,"last_link_id":193,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen3.5_9b_w4a8_gptq.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/MOSS/qwen3.5_9b_w4a8_gptq.safetensors","moss_image","default"],"widgets_values_named":{"clip_name":"models/MOSS/qwen3.5_9b_w4a8_gptq.safetensors","type":"moss_image","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":15,"mode":0,"inputs":[{"name":"samples","type":"LATENT","link":10},{"name":"vae","type":"VAE","link":11}],"outputs":[{"name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":1,"mode":0,"inputs":[],"outputs":[{"name":"VAE","type":"VAE","links":[11]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"flux2-vae_small.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae_small.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/flux2/flux2-vae_small.safetensors"],"widgets_values_named":{"vae_name":"models/flux2/flux2-vae_small.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":2,"mode":0,"inputs":[],"outputs":[{"name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"moss_image_sft_int8_convrot.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/diffusion_models/moss_image_sft_int8_convrot.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/MOSS/moss_image_sft_int8_convrot.safetensors","default"],"widgets_values_named":{"unet_name":"models/MOSS/moss_image_sft_int8_convrot.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":81}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[187]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":80}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[186]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":6,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":83}],"outputs":[{"name":"MODEL","type":"MODEL","links":[190,191]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["moss_image_lora.safetensors",1],"widgets_values_named":{"lora_name":"moss_image_lora.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":14,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":189},{"name":"positive","type":"CONDITIONING","link":186},{"name":"negative","type":"CONDITIONING","link":187},{"name":"latent_image","type":"LATENT","link":176}],"outputs":[{"name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",25,2.5,"er_sde","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":25,"cfg":2.5,"sampler_name":"er_sde","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":16,"mode":0,"inputs":[{"name":"images","type":"IMAGE","link":82}],"outputs":[{"name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/MOSS_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/MOSS_%date:yyyyMMdd%"}},{"id":28,"type":"EmptyFlux2LatentImage","pos":[711.2040958030439,323.49853495656214],"size":[307.59114583333337,106],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[{"name":"LATENT","type":"LATENT","links":[176]}],"properties":{"Node name for S&R":"EmptyFlux2LatentImage","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1024,1024,1],"widgets_values_named":{"width":1024,"height":1024,"batch_size":1}},{"id":63,"type":"CADS","pos":[707.3550777298739,-269.9005590778716],"size":[270,298],"flags":{},"order":13,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":193}],"outputs":[{"name":"MODEL","type":"MODEL","links":[189]}],"properties":{"Node name for S&R":"CADS","cnr_id":"comfyui-cads","ver":"1.1.0"},"widgets_values":[0.1,0.6,0.9,0.5,5,30,"both","both","normal",1094014663,"randomize"],"widgets_values_named":{"noise_scale":0.1,"t1":0.6,"t2":0.9,"rescale":0.5,"start_step":5,"total_steps":30,"apply_to":"both","key":"both","noise_type":"normal","seed":1094014663,"control_after_generate":"randomize"}},{"id":64,"type":"SkipLayerGuidanceDiTSimple","pos":[126.62255169134266,-316.94636752049865],"size":[300,160],"flags":{},"order":11,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":191}],"outputs":[{"name":"MODEL","type":"MODEL","links":[192]}],"properties":{"Node name for S&R":"SkipLayerGuidanceDiTSimple"},"widgets_values":["","22",0,0.5],"widgets_values_named":{"double_layers":"","single_layers":"22","start_percent":0,"end_percent":0.5}},{"id":65,"type":"ComfySwitchNode","pos":[126.62255169134266,-116.94636752049865],"size":[270,110],"flags":{},"order":12,"mode":0,"title":"SLG on/off","inputs":[{"name":"on_false","shape":7,"type":"MODEL","link":190},{"name":"on_true","shape":7,"type":"MODEL","link":192},{"name":"switch","type":"BOOLEAN","widget":{"name":"switch"},"link":null}],"outputs":[{"name":"output","type":"MODEL","links":[193]}],"properties":{"Node name for S&R":"ComfySwitchNode"},"widgets_values":[false],"widgets_values_named":{"switch":false}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[176,28,0,19,3,"LATENT"],[186,11,0,19,1,"CONDITIONING"],[187,12,0,19,2,"CONDITIONING"],[189,63,0,19,0,"MODEL"],[190,49,0,65,0,"MODEL"],[191,49,0,64,0,"MODEL"],[192,64,0,65,1,"MODEL"],[193,65,0,63,0,"MODEL"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.7947449170740577,"offset":[664.1541657805558,598.3078183037634]},"frontendVersion":"1.55.18","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4},"img2img":{"id":"ce2599c0-1206-4a49-9049-3623bbc3c5af","revision":0,"last_node_id":65,"last_link_id":195,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen3.5_9b_w4a8_gptq.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/MOSS/qwen3.5_9b_w4a8_gptq.safetensors","moss_image","default"],"widgets_values_named":{"clip_name":"models/MOSS/qwen3.5_9b_w4a8_gptq.safetensors","type":"moss_image","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":17,"mode":0,"inputs":[{"name":"samples","type":"LATENT","link":10},{"name":"vae","type":"VAE","link":11}],"outputs":[{"name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":53,"type":"ImageScale","pos":[743.4037482562973,565.2220989113353],"size":[270,130],"flags":{},"order":6,"mode":0,"inputs":[{"name":"image","type":"IMAGE","link":163}],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[174]}],"properties":{"Node name for S&R":"ImageScale","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":["lanczos",1024,1024,"disabled"],"widgets_values_named":{"upscale_method":"lanczos","width":1024,"height":1024,"crop":"disabled"}},{"id":51,"type":"LoadImage","pos":[724.5253536266969,749.4620387119438],"size":[282.7333297729492,314.0000000000001],"flags":{},"order":1,"mode":0,"inputs":[],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[163]},{"name":"MASK","type":"MASK","links":[]}],"properties":{"Node name for S&R":"LoadImage","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["example.png","image"],"widgets_values_named":{"image":"example.png","upload":"image"}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":2,"mode":0,"inputs":[],"outputs":[{"name":"VAE","type":"VAE","links":[11,89]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"flux2-vae_small.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae_small.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/flux2/flux2-vae_small.safetensors"],"widgets_values_named":{"vae_name":"models/flux2/flux2-vae_small.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[{"name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"moss_image_sft_int8_convrot.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/diffusion_models/moss_image_sft_int8_convrot.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/MOSS/moss_image_sft_int8_convrot.safetensors","default"],"widgets_values_named":{"unet_name":"models/MOSS/moss_image_sft_int8_convrot.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":81}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[188]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":80}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[187]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":7,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":83}],"outputs":[{"name":"MODEL","type":"MODEL","links":[192,193]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["moss_image_lora.safetensors",1],"widgets_values_named":{"lora_name":"moss_image_lora.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":16,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":191},{"name":"positive","type":"CONDITIONING","link":187},{"name":"negative","type":"CONDITIONING","link":188},{"name":"latent_image","type":"LATENT","link":186}],"outputs":[{"name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",25,2.5,"er_sde","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":25,"cfg":2.5,"sampler_name":"er_sde","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":18,"mode":0,"inputs":[{"name":"images","type":"IMAGE","link":82}],"outputs":[{"name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/MOSS_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/MOSS_%date:yyyyMMdd%"}},{"id":52,"type":"VAEEncode","pos":[882.1358965920655,473.63455299354797],"size":[140,46],"flags":{},"order":8,"mode":0,"inputs":[{"name":"pixels","type":"IMAGE","link":174},{"name":"vae","type":"VAE","link":89}],"outputs":[{"name":"LATENT","type":"LATENT","links":[186]}],"properties":{"Node name for S&R":"VAEEncode","cnr_id":"comfy-core","ver":"0.13.0"}},{"id":63,"type":"CADS","pos":[706.0968123688552,-367.4161245568241],"size":[270,298],"flags":{},"order":15,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":195}],"outputs":[{"name":"MODEL","type":"MODEL","links":[191]}],"properties":{"Node name for S&R":"CADS","cnr_id":"comfyui-cads","ver":"1.1.0"},"widgets_values":[0.1,0.6,0.9,0.5,5,30,"both","both","normal",1094014663,"randomize"],"widgets_values_named":{"noise_scale":0.1,"t1":0.6,"t2":0.9,"rescale":0.5,"start_step":5,"total_steps":30,"apply_to":"both","key":"both","noise_type":"normal","seed":1094014663,"control_after_generate":"randomize"}},{"id":64,"type":"SkipLayerGuidanceDiTSimple","pos":[126.62255169134266,-316.94636752049865],"size":[300,160],"flags":{},"order":13,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":193}],"outputs":[{"name":"MODEL","type":"MODEL","links":[194]}],"properties":{"Node name for S&R":"SkipLayerGuidanceDiTSimple"},"widgets_values":["","22",0,0.5],"widgets_values_named":{"double_layers":"","single_layers":"22","start_percent":0,"end_percent":0.5}},{"id":65,"type":"ComfySwitchNode","pos":[126.62255169134266,-116.94636752049865],"size":[270,110],"flags":{},"order":14,"mode":0,"title":"SLG on/off","inputs":[{"name":"on_false","shape":7,"type":"MODEL","link":192},{"name":"on_true","shape":7,"type":"MODEL","link":194},{"name":"switch","type":"BOOLEAN","widget":{"name":"switch"},"link":null}],"outputs":[{"name":"output","type":"MODEL","links":[195]}],"properties":{"Node name for S&R":"ComfySwitchNode"},"widgets_values":[false],"widgets_values_named":{"switch":false}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[89,15,0,52,1,"VAE"],[163,51,0,53,0,"IMAGE"],[174,53,0,52,0,"IMAGE"],[186,52,0,19,3,"LATENT"],[187,11,0,19,1,"CONDITIONING"],[188,12,0,19,2,"CONDITIONING"],[191,63,0,19,0,"MODEL"],[192,49,0,65,0,"MODEL"],[193,49,0,64,0,"MODEL"],[194,64,0,65,1,"MODEL"],[195,65,0,63,0,"MODEL"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.7947449170740577,"offset":[631.4392663940685,634.1683810927975]},"frontendVersion":"1.55.18","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4},"inpainting":{"id":"5748cb27-06e7-4d3e-8995-87702065b92f","revision":0,"last_node_id":65,"last_link_id":192,"nodes":[{"id":45,"type":"CLIPLoader","pos":[-223.3332571831404,336.66666237884544],"size":[307.59114583333337,106],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"CLIP","type":"CLIP","links":[80,81]}],"properties":{"Node name for S&R":"CLIPLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"qwen3.5_9b_w4a8_gptq.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors","directory":"text_encoders"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/MOSS/qwen3.5_9b_w4a8_gptq.safetensors","moss_image","default"],"widgets_values_named":{"clip_name":"models/MOSS/qwen3.5_9b_w4a8_gptq.safetensors","type":"moss_image","device":"default"}},{"id":8,"type":"VAEDecode","pos":[1159.2131050501364,684.8733539487137],"size":[210,46],"flags":{},"order":17,"mode":0,"inputs":[{"name":"samples","type":"LATENT","link":10},{"name":"vae","type":"VAE","link":11}],"outputs":[{"name":"IMAGE","type":"IMAGE","slot_index":0,"links":[82]}],"properties":{"Node name for S&R":"VAEDecode","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65}},{"id":53,"type":"ImageScale","pos":[743.4037482562973,565.2220989113353],"size":[270,130],"flags":{},"order":6,"mode":0,"inputs":[{"name":"image","type":"IMAGE","link":163}],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[164]}],"properties":{"Node name for S&R":"ImageScale","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":["lanczos",1024,1024,"disabled"],"widgets_values_named":{"upscale_method":"lanczos","width":1024,"height":1024,"crop":"disabled"}},{"id":51,"type":"LoadImage","pos":[724.5253536266969,749.4620387119438],"size":[282.7333297729492,314.0000000000001],"flags":{},"order":1,"mode":0,"inputs":[],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[163]},{"name":"MASK","type":"MASK","links":[161]}],"properties":{"Node name for S&R":"LoadImage","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["example.png","image"],"widgets_values_named":{"image":"example.png","upload":"image"}},{"id":15,"type":"VAELoader","pos":[-223.3332571831404,506.66666909901346],"size":[307.59114583333337,58],"flags":{},"order":2,"mode":0,"inputs":[],"outputs":[{"name":"VAE","type":"VAE","links":[11,165]}],"properties":{"Node name for S&R":"VAELoader","cnr_id":"comfy-core","ver":"0.3.40","models":[{"name":"flux2-vae_small.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/vae/flux2-vae_small.safetensors","directory":"vae"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/flux2/flux2-vae_small.safetensors"],"widgets_values_named":{"vae_name":"models/flux2/flux2-vae_small.safetensors"}},{"id":44,"type":"UNETLoader","pos":[-223.3332571831404,196.66661176308236],"size":[307.59114583333337,82],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[{"name":"MODEL","type":"MODEL","links":[83]}],"properties":{"Node name for S&R":"UNETLoader","cnr_id":"comfy-core","ver":"0.11.0","models":[{"name":"moss_image_sft_int8_convrot.safetensors","url":"https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/diffusion_models/moss_image_sft_int8_convrot.safetensors","directory":"diffusion_models"}],"enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["models/MOSS/moss_image_sft_int8_convrot.safetensors","default"],"widgets_values_named":{"unet_name":"models/MOSS/moss_image_sft_int8_convrot.safetensors","weight_dtype":"default"}},{"id":12,"type":"CLIPTextEncode","pos":[161.60931205580908,672.0247742291098],"size":[500,110],"flags":{},"order":5,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":81}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[158]}],"title":"CLIP Text Encode (Negative Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[""],"widgets_values_named":{"text":""},"color":"#223","bgcolor":"#335"},{"id":11,"type":"CLIPTextEncode","pos":[167.28139257768257,185.49094343714856],"size":[480,410],"flags":{},"order":4,"mode":0,"inputs":[{"name":"clip","type":"CLIP","link":80}],"outputs":[{"name":"CONDITIONING","type":"CONDITIONING","links":[171]}],"title":"CLIP Text Encode (Positive Prompt)","properties":{"Node name for S&R":"CLIPTextEncode","cnr_id":"comfy-core","ver":"0.3.65","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["Example prompt"],"widgets_values_named":{"text":"Example prompt"},"color":"#232","bgcolor":"#353"},{"id":49,"type":"LoraLoaderModelOnly","pos":[-193.37744830865734,-56.946367520498654],"size":[270,82],"flags":{},"order":7,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":83}],"outputs":[{"name":"MODEL","type":"MODEL","links":[189,190]}],"properties":{"Node name for S&R":"LoraLoaderModelOnly","cnr_id":"comfy-core","ver":"0.13.0"},"widgets_values":["moss_image_lora.safetensors",1],"widgets_values_named":{"lora_name":"moss_image_lora.safetensors","strength_model":1}},{"id":19,"type":"KSampler","pos":[1075.4116996158523,125.47275446823808],"size":[290,474],"flags":{},"order":16,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":188},{"name":"positive","type":"CONDITIONING","link":172},{"name":"negative","type":"CONDITIONING","link":173},{"name":"latent_image","type":"LATENT","link":186}],"outputs":[{"name":"LATENT","type":"LATENT","slot_index":0,"links":[10]}],"properties":{"Node name for S&R":"KSampler","cnr_id":"comfy-core","ver":"0.3.40","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":[1049125633936695,"randomize",25,2.5,"er_sde","simple",1],"widgets_values_named":{"seed":1049125633936695,"control_after_generate":"randomize","steps":25,"cfg":2.5,"sampler_name":"er_sde","scheduler":"simple","denoise":1}},{"id":46,"type":"SaveImage","pos":[1434.2334435480116,122.75161551827712],"size":[580,640],"flags":{},"order":18,"mode":0,"inputs":[{"name":"images","type":"IMAGE","link":82}],"outputs":[{"name":"images","type":"IMAGE","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.11.1","Node name for S&R":"SaveImage","enableTabs":false,"tabWidth":65,"tabXOffset":10,"hasSecondTab":false,"secondTabText":"Send Back","secondTabOffset":80,"secondTabWidth":65},"widgets_values":["%date:yyyyMMdd%/MOSS_%date:yyyyMMdd%"],"widgets_values_named":{"filename_prefix":"%date:yyyyMMdd%/MOSS_%date:yyyyMMdd%"}},{"id":60,"type":"InpaintModelConditioning","pos":[743.558142409847,134.55623550833846],"size":[270,138],"flags":{},"order":8,"mode":0,"inputs":[{"name":"positive","type":"CONDITIONING","link":171},{"name":"negative","type":"CONDITIONING","link":158},{"name":"vae","type":"VAE","link":165},{"name":"pixels","type":"IMAGE","link":164},{"name":"mask","type":"MASK","link":161}],"outputs":[{"name":"positive","type":"CONDITIONING","links":[172]},{"name":"negative","type":"CONDITIONING","links":[173]},{"name":"latent","type":"LATENT","links":[186]}],"properties":{"Node name for S&R":"InpaintModelConditioning","cnr_id":"comfy-core","ver":"0.20.3"},"widgets_values":[true],"widgets_values_named":{"noise_mask":true}},{"id":63,"type":"CADS","pos":[718.6794659790431,-358.60826702969285],"size":[270,298],"flags":{},"order":15,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":192}],"outputs":[{"name":"MODEL","type":"MODEL","links":[188]}],"properties":{"Node name for S&R":"CADS","cnr_id":"comfyui-cads","ver":"1.1.0"},"widgets_values":[0.1,0.6,0.9,0.5,5,30,"both","both","normal",1094014663,"randomize"],"widgets_values_named":{"noise_scale":0.1,"t1":0.6,"t2":0.9,"rescale":0.5,"start_step":5,"total_steps":30,"apply_to":"both","key":"both","noise_type":"normal","seed":1094014663,"control_after_generate":"randomize"}},{"id":64,"type":"SkipLayerGuidanceDiTSimple","pos":[126.62255169134266,-316.94636752049865],"size":[300,160],"flags":{},"order":13,"mode":0,"inputs":[{"name":"model","type":"MODEL","link":190}],"outputs":[{"name":"MODEL","type":"MODEL","links":[191]}],"properties":{"Node name for S&R":"SkipLayerGuidanceDiTSimple"},"widgets_values":["","22",0,0.5],"widgets_values_named":{"double_layers":"","single_layers":"22","start_percent":0,"end_percent":0.5}},{"id":65,"type":"ComfySwitchNode","pos":[126.62255169134266,-116.94636752049865],"size":[270,110],"flags":{},"order":14,"mode":0,"title":"SLG on/off","inputs":[{"name":"on_false","shape":7,"type":"MODEL","link":189},{"name":"on_true","shape":7,"type":"MODEL","link":191},{"name":"switch","type":"BOOLEAN","widget":{"name":"switch"},"link":null}],"outputs":[{"name":"output","type":"MODEL","links":[192]}],"properties":{"Node name for S&R":"ComfySwitchNode"},"widgets_values":[false],"widgets_values_named":{"switch":false}}],"links":[[10,19,0,8,0,"LATENT"],[11,15,0,8,1,"VAE"],[80,45,0,11,0,"CLIP"],[81,45,0,12,0,"CLIP"],[82,8,0,46,0,"IMAGE"],[83,44,0,49,0,"MODEL"],[158,12,0,60,1,"CONDITIONING"],[161,51,1,60,4,"MASK"],[163,51,0,53,0,"IMAGE"],[164,53,0,60,3,"IMAGE"],[165,15,0,60,2,"VAE"],[171,11,0,60,0,"CONDITIONING"],[172,60,0,19,1,"CONDITIONING"],[173,60,1,19,2,"CONDITIONING"],[186,60,2,19,3,"LATENT"],[188,63,0,19,0,"MODEL"],[189,49,0,65,0,"MODEL"],[190,49,0,64,0,"MODEL"],[191,64,0,65,1,"MODEL"],[192,65,0,63,0,"MODEL"]],"groups":[{"id":1,"title":"Load Models","bounding":[-230,98.33333333333333,350,490],"color":"#3f789e","flags":{}},{"id":3,"title":"Prompt","bounding":[144.59118445737843,100.7768124723012,520,700],"color":"#3f789e","flags":{}}],"config":{},"extra":{"ds":{"scale":0.8742194087814635,"offset":[617.1407963824913,747.2978758243913]},"frontendVersion":"1.55.18","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4}}}</script>
 
+<!-- Default ComfyUI workflows for the built-in custom workflows (Extras). Same script regenerates it. -->
+<script type="application/json" id="default-custom-workflows">{"upscale_with_model":{"id":"a148992a-7d0f-4888-b676-e1abe2c66c2a","revision":0,"last_node_id":11,"last_link_id":12,"nodes":[{"id":2,"type":"LoadImage","pos":[328.96312920808214,2383.6613789502067],"size":[680,515],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[8]},{"name":"MASK","type":"MASK","links":null}],"properties":{"Node name for S&R":"LoadImage"},"widgets_values":["example.png","image"],"widgets_values_named":{"image":"example.png","upload":"image"}},{"id":5,"type":"SaveImage","pos":[1800.0001884089754,2430.000049132633],"size":[680,490.98958333333337],"flags":{},"order":5,"mode":0,"inputs":[{"name":"images","type":"IMAGE","link":11}],"outputs":[{"name":"images","type":"IMAGE","links":null}],"properties":{},"widgets_values":["ComfyUI"],"widgets_values_named":{"filename_prefix":"ComfyUI"}},{"id":8,"type":"MarkdownNote","pos":[2515.0002569920625,3014.9996498024225],"size":[210,97.99479166666667],"flags":{},"order":1,"mode":0,"inputs":[],"outputs":[],"properties":{},"widgets_values":["Image Compare is now only available under Nodes 2.0. Open menu -> Nodes 2.0 to switch"],"widgets_values_named":{"text":"Image Compare is now only available under Nodes 2.0. Open menu -> Nodes 2.0 to switch"},"color":"#222","bgcolor":"#000"},{"id":9,"type":"UpscaleModelLoader","pos":[712.743331937429,2137.393417595043],"size":[270,58],"flags":{},"order":2,"mode":0,"inputs":[],"outputs":[{"name":"UPSCALE_MODEL","type":"UPSCALE_MODEL","links":[7]}],"properties":{"Node name for S&R":"UpscaleModelLoader"},"widgets_values":["models/4x_foolhardy_Remacri.pth"],"widgets_values_named":{"model_name":"models/4x_foolhardy_Remacri.pth"}},{"id":10,"type":"ImageUpscaleWithModel","pos":[1168.2353574825695,2141.8014049390295],"size":[233.53333129882813,46],"flags":{},"order":3,"mode":0,"inputs":[{"name":"upscale_model","type":"UPSCALE_MODEL","link":7},{"name":"image","type":"IMAGE","link":8}],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[12]}],"properties":{"Node name for S&R":"ImageUpscaleWithModel"}},{"id":11,"type":"ImageScale","pos":[1362.18680061792,2654.597265955979],"size":[270,130],"flags":{},"order":4,"mode":0,"inputs":[{"name":"image","type":"IMAGE","link":12}],"outputs":[{"name":"IMAGE","type":"IMAGE","links":[11]}],"properties":{"Node name for S&R":"ImageScale"},"widgets_values":["lanczos",1536,1536,"disabled"],"widgets_values_named":{"upscale_method":"lanczos","width":1536,"height":1536,"crop":"disabled"}}],"links":[[7,9,0,10,0,"UPSCALE_MODEL"],[8,2,0,10,1,"IMAGE"],[11,11,0,5,0,"IMAGE"],[12,10,0,11,0,"IMAGE"]],"groups":[],"config":{},"extra":{"ds":{"scale":0.6805827163032915,"offset":[283.46180780323306,-1552.6004299596702]},"workflowRendererVersion":"Vue-corrected","frontendVersion":"1.55.18","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4}}</script>
 <script>
 'use strict';
 
@@ -496,6 +527,7 @@ table.map td:first-child .hint { display: block; }
 const CONFIG_VERSION = 1;
 const LS_CONFIG = 'ainvil.config';
 const LS_GEN = 'ainvil.generate';
+const LS_EXTRAS = 'ainvil.extras';
 const DEFAULT_API = 'http://localhost:8188/';
 const MODES = ['txt2img', 'img2img', 'inpainting'];
 const UPLOAD_SUBFOLDER = 'ainvil';
@@ -526,6 +558,8 @@ const FPARAMS = [
 // CADS node inputs shown in the CADS section; the seed follows the image seed.
 const CADS_FIELDS = ['noise_scale', 't1', 't2', 'rescale', 'start_step', 'total_steps', 'apply_to', 'key', 'noise_type'];
 const PARAM_TYPES = ['int', 'float', 'string', 'text', 'boolean', 'combo'];
+// Custom workflow parameters can also be input images (uploaded; several images = one run per image).
+const CW_PARAM_TYPES = [...PARAM_TYPES, 'image'];
 
 const RESOLUTIONS = {
   '1024': { square: [1024, 1024], landscape: [1216, 832], portrait: [832, 1216] },
@@ -627,7 +661,8 @@ function canvasToBlob(c, type = 'image/png') {
 }
 
 // With textPassThrough, plain-text drags are left alone so text can still be dropped into text boxes.
-function makeDropZone(el, onFile, { textPassThrough = false } = {}) {
+// With multiple, onFile is called for every dropped file in turn.
+function makeDropZone(el, onFile, { textPassThrough = false, multiple = false } = {}) {
   const wanted = (e) => !textPassThrough || ['Files', 'text/uri-list'].some((ty) => e.dataTransfer.types.includes(ty));
   el.addEventListener('dragover', (e) => { if (!wanted(e)) return; e.preventDefault(); el.classList.add('drag'); });
   el.addEventListener('dragleave', () => el.classList.remove('drag'));
@@ -635,8 +670,11 @@ function makeDropZone(el, onFile, { textPassThrough = false } = {}) {
     if (!wanted(e)) return;
     e.preventDefault();
     el.classList.remove('drag');
-    const f = e.dataTransfer.files?.[0];
-    if (f) return onFile(f);
+    const files = [...(e.dataTransfer.files || [])];
+    if (files.length) {
+      for (const f of multiple ? files : files.slice(0, 1)) await onFile(f);
+      return;
+    }
     // Allow dragging an image from the gallery (or another page) by URL.
     const uri = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
     if (uri && /^(https?:|blob:|data:)/.test(uri.trim())) {
@@ -763,6 +801,32 @@ function defaultFw(name, wfs, extraParams = []) {
   };
 }
 
+// "Upscale with model" over workflows/upscale_with_model.json: #2 LoadImage -> #10 ImageUpscaleWithModel (model from
+// #9 UpscaleModelLoader, which sets the factor) -> #11 ImageScale to the target size -> #5 SaveImage.
+function defaultUpscaleCw(wf) {
+  const p = (name, type, node, input, extra = {}) => ({ name, type, default: null, options: [], ...extra, mappings: [t(node, input)] });
+  const size = { min: 0, max: 16384, step: 8 };
+  return {
+    name: 'Upscale with model',
+    workflow: wf || null,
+    parameters: [
+      p('Image', 'image', 2, 'image', { hint: 'Add several images to upscale them all, one queue entry each.' }),
+      p('Upscale model', 'combo', 9, 'model_name', { hint: 'The model sets the upscale factor (2x, 4x, …); the result is then resized to Width × Height.' }),
+      p('Width', 'int', 11, 'width', { default: 1536, ...size, hint: '0 = follow Height, keeping the aspect ratio' }),
+      p('Height', 'int', 11, 'height', { default: 1536, ...size, hint: '0 = follow Width, keeping the aspect ratio' }),
+      p('Resize method', 'combo', 11, 'upscale_method', { default: 'lanczos' }),
+      p('Crop', 'combo', 11, 'crop', { default: 'disabled', hint: '"center" crops to the target aspect ratio instead of stretching' }),
+      p('Filename prefix', 'string', 5, 'filename_prefix', { default: '%date:yyyyMMdd%/upscale_%input%', hint: '%input% is the input image name' }),
+    ],
+  };
+}
+
+function defaultCustomWorkflows() {
+  let wfs = {};
+  try { wfs = JSON.parse($('#default-custom-workflows').textContent); } catch (e) { console.error('Default custom workflows missing', e); }
+  return [defaultUpscaleCw(wfs.upscale_with_model)];
+}
+
 function defaultConfig() {
   let wfs = {};
   try { wfs = JSON.parse($('#default-workflows').textContent); } catch (e) { console.error('Default workflows missing', e); }
@@ -783,7 +847,7 @@ function defaultConfig() {
         { name: 'SLG end percent', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, node: 64, input: 'end_percent' },
       ]),
     ],
-    customWorkflows: [],
+    customWorkflows: defaultCustomWorkflows(),
   };
 }
 
@@ -805,9 +869,10 @@ function normalizeTargets(list, where) {
 function normalizeParam(p, where, perMode) {
   if (!isObj(p)) throw new Error(`${where}: parameter must be an object.`);
   if (!p.name) throw new Error(`${where}: parameter needs a "name".`);
-  const type = PARAM_TYPES.includes(p.type) ? p.type : 'string';
+  const type = (perMode ? PARAM_TYPES : CW_PARAM_TYPES).includes(p.type) ? p.type : 'string';
   const out = { name: String(p.name), type, default: p.default ?? null, options: Array.isArray(p.options) ? p.options.map(String) : [] };
   for (const k of ['min', 'max', 'step']) if (p[k] != null && p[k] !== '') out[k] = Number(p[k]);
+  for (const k of ['filter', 'hint']) if (p[k]) out[k] = String(p[k]);
   if (perMode) {
     out.mappings = {};
     for (const m of MODES) out.mappings[m] = normalizeTargets(p.mappings?.[m], `${where}.mappings.${m}`);
@@ -978,6 +1043,7 @@ async function connect({ quiet = false } = {}) {
     cs.textContent = `ComfyUI ${serverVersion} · ${new URL(api.base()).host}`;
     openSocket();
     refreshGenerateOptions();
+    renderExtras();
     renderConfigLists();
     return stats;
   } catch (e) {
@@ -1041,7 +1107,8 @@ async function onPreviewFrame(blob) {
   } else return;
   setLivePreview(URL.createObjectURL(img));
 }
-function setProgress(f) { $('#progressBar').style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; }
+// Generate and Extras runs exclude each other, so both progress bars can follow the same run.
+function setProgress(f) { for (const b of $$('.progress > div')) b.style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; }
 
 /* ======================================================================
    Workflow conversion (UI format -> API format) and inspection
@@ -1330,18 +1397,19 @@ function insertRepeat(a, target, amount) {
 }
 
 // The ComfyUI frontend (not the server) expands %date:FORMAT% and %Node title.widget% in
-// filename_prefix, so we do the same before queueing.
+// filename_prefix, so we do the same before queueing. `vars` adds our own (%input% in custom workflows).
 function formatDate(fmt, d = new Date()) {
   const pad = (n, w = 2) => String(n).padStart(w, '0');
   const parts = { yyyy: d.getFullYear(), yy: pad(d.getFullYear() % 100), MM: pad(d.getMonth() + 1), M: d.getMonth() + 1, dd: pad(d.getDate()), d: d.getDate(), hh: pad(d.getHours()), h: d.getHours(), mm: pad(d.getMinutes()), m: d.getMinutes(), ss: pad(d.getSeconds()), s: d.getSeconds() };
   return fmt.replace(/yyyy|yy|MM|M|dd|d|hh|h|mm|m|ss|s/g, (k) => parts[k]);
 }
-function expandFilenamePrefixes(a) {
+function expandFilenamePrefixes(a, vars = {}) {
   const now = new Date();
   for (const n of Object.values(a)) {
     const v = n.inputs.filename_prefix;
     if (typeof v !== 'string' || !v.includes('%')) continue;
     n.inputs.filename_prefix = v.replace(/%([^%]+)%/g, (whole, expr) => {
+      if (expr in vars) return vars[expr];
       if (expr.startsWith('date:')) return formatDate(expr.slice(5), now);
       const dot = expr.lastIndexOf('.');
       if (dot < 0) return whole;
@@ -1357,6 +1425,13 @@ function outputNodeIds(a, m) {
   const mapped = (m.output || []).map((x) => x.node).filter((id) => a[id]);
   if (mapped.length) return mapped;
   return Object.keys(a).filter((id) => ['SaveImage', 'PreviewImage'].includes(a[id].class_type));
+}
+
+// For Server Preferences > Save Image off: return the images through the API without saving them.
+function saveToPreview(a, ids) {
+  for (const id of ids) {
+    if (a[id].class_type === 'SaveImage') a[id] = { class_type: 'PreviewImage', inputs: { images: a[id].inputs.images }, _meta: { title: 'Preview Image' } };
+  }
 }
 
 function buildPrompt(fw, mode, p) {
@@ -1415,12 +1490,55 @@ function buildPrompt(fw, mode, p) {
   const loraT = (m.lora || []).find((x) => x.node);
   if (loraT) applyLoras(a, loraT.node, p.loras || []);
   expandFilenamePrefixes(a);
-  if (!p.saveImage) {
-    for (const id of outputNodeIds(a, m)) {
-      if (a[id].class_type === 'SaveImage') a[id] = { class_type: 'PreviewImage', inputs: { images: a[id].inputs.images }, _meta: { title: 'Preview Image' } };
+  if (!p.saveImage) saveToPreview(a, outputNodeIds(a, m));
+  return a;
+}
+
+// p: { values: {name: value}, images: {name: uploaded path}, vars, saveImage }. Unset values use cwDefault().
+function buildCustomPrompt(cw, p) {
+  if (!cw.workflow) throw new Error(`"${cw.name}" has no ComfyUI workflow loaded.`);
+  const a = clone(templateApi(cw.workflow));
+  for (const cp of cw.parameters) {
+    let v;
+    if (cp.type === 'image') v = p.images?.[cp.name];
+    else v = coerce(cp.type === 'text' || cp.type === 'combo' ? 'string' : cp.type, p.values?.[cp.name] ?? cwDefault(cw, cp));
+    if (v == null || ((cp.type === 'combo' || cp.type === 'image') && v === '')) continue;
+    for (const tg of cp.mappings) {
+      if (!tg.node) continue;
+      if (!a[tg.node]) throw new Error(`Parameter "${cp.name}" points at node #${tg.node}, which is not in the workflow.`);
+      if (tg.input) a[tg.node].inputs[tg.input] = v;
     }
   }
+  expandFilenamePrefixes(a, p.vars);
+  if (!p.saveImage) saveToPreview(a, outputNodeIds(a, {}));
   return a;
+}
+
+// A parameter's default; an empty one means the mapped input's value in the workflow.
+function cwDefault(cw, cp) {
+  if (cp.default != null && cp.default !== '') return cp.default;
+  if (!cw.workflow) return cp.default;
+  try {
+    const a = templateApi(cw.workflow);
+    for (const tg of cp.mappings) {
+      const v = tg.input && a[tg.node]?.inputs?.[tg.input];
+      if (v != null && !Array.isArray(v)) return v;
+    }
+  } catch {}
+  return cp.default;
+}
+
+function cwOptions(cw, cp) {
+  if (cp.options?.length) return cp.options;
+  if (!OI || !cw.workflow) return null;
+  for (const tg of cp.mappings) {
+    try {
+      const n = templateApi(cw.workflow)[tg.node];
+      const opts = n && comboOptions(specFor(n.class_type, tg.input));
+      if (opts) return opts;
+    } catch {}
+  }
+  return null;
 }
 
 function optionsFor(fw, key) {
@@ -1499,7 +1617,7 @@ function searchList(list, query) {
    ====================================================================== */
 let gen;
 const input = { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null };
-const gallery = { items: [], sel: 0, preview: null, previewPending: null, picked: false };
+const gallery = { items: [], sel: 0, preview: null, previewPending: null, picked: false, render: () => renderGallery() };
 const uploadCache = new Map();
 let busy = false, cancelRequested = false, activeJobs = [];
 
@@ -1792,7 +1910,7 @@ function renderGallery() {
   }
   gallery.sel = live ? items.length - 1 : Math.min(gallery.sel, items.length - 1);
   const it = items[gallery.sel];
-  main.replaceChildren(h('img', { src: it.src, alt: it.filename, onclick: () => openViewer(gallery.sel) }));
+  main.replaceChildren(h('img', { src: it.src, alt: it.filename, onclick: () => openViewer(gallery, gallery.sel) }));
   info.textContent = `${gallery.sel + 1} / ${items.length} · seed ${it.seed}${it.batchIndex ? ` (batch #${it.batchIndex})` : ''} · ${it.filename}`;
   thumbs.replaceChildren(...items.map(thumb));
 }
@@ -1821,15 +1939,18 @@ function clearLivePreview() {
 // The viewer loads the /view URL directly when the browser allows it, because ComfyUI sends a
 // Content-Disposition filename there and right-click "Save Image As" uses it. Blob URLs have no
 // name ("Untitled"), so they're the fallback, wrapped in a download link for "Save Link As".
-function openViewer(i) {
-  gallery.sel = i;
-  const it = gallery.items[i];
+// `g` is the image list being viewed: the Generate gallery or the Extras output.
+let viewing = gallery;
+function openViewer(g, i) {
+  viewing = g;
+  g.sel = i;
+  const it = g.items[i];
   const img = $('#viewerImg');
   img.onerror = () => { img.onerror = null; if (it.src !== it.url) img.src = it.src; };
   img.src = it.url;
   Object.assign($('#viewerLink'), { href: it.src, download: it.filename });
   $('#viewer').hidden = false;
-  renderGallery();
+  g.render();
 }
 function closeViewer() {
   $('#viewer').hidden = true;
@@ -1838,8 +1959,9 @@ function closeViewer() {
   $('#viewerLink').removeAttribute('href');
 }
 function stepViewer(d) {
-  if (!gallery.items.length) return;
-  openViewer((gallery.sel + d + gallery.items.length) % gallery.items.length);
+  const g = viewing;
+  if (!g.items.length) return;
+  openViewer(g, (g.sel + d + g.items.length) % g.items.length);
 }
 
 // Images are fetched (CORS) into blob URLs: Firefox refuses <img> loads of http:// URLs
@@ -1868,27 +1990,27 @@ async function fetchBlob(url) {
   return r.blob();
 }
 
-async function downloadSelected() {
-  const it = gallery.items[gallery.sel];
+async function downloadSelected(g = gallery) {
+  const it = g.items[g.sel];
   if (!it) return toast('No image selected');
   try { downloadBlob(await itemBlob(it), it.filename); }
   catch { window.open(it.url, '_blank'); }
 }
 
-async function downloadAll() {
-  if (!gallery.items.length) return toast('No images to download');
-  if (gallery.items.length === 1) return downloadSelected();
+async function downloadAll(g = gallery, zipPrefix = 'ainvil-batch') {
+  if (!g.items.length) return toast('No images to download');
+  if (g.items.length === 1) return downloadSelected(g);
   try {
-    toast(`Packing ${gallery.items.length} images…`);
+    toast(`Packing ${g.items.length} images…`);
     const used = new Set();
     const files = [];
-    for (const it of gallery.items) {
+    for (const it of g.items) {
       let name = it.filename, n = 1;
       while (used.has(name)) name = it.filename.replace(/(\.\w+)?$/, `-${n++}$1`);
       used.add(name);
       files.push({ name, data: new Uint8Array(await (await itemBlob(it)).arrayBuffer()) });
     }
-    downloadBlob(makeZip(files), `ainvil-batch-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`);
+    downloadBlob(makeZip(files), `${zipPrefix}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`);
   } catch (e) {
     toast('Download failed: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error');
   }
@@ -1929,14 +2051,22 @@ async function serverMaskBlob() {
   return canvasToBlob(c);
 }
 
-async function ensureUploads(mode) {
-  const key = api.base() + '|' + input.hash;
+// Uploads go to input/ainvil/ainvil_<content hash>.<ext>, once per server.
+async function uploadCached(blob, hash) {
+  const key = api.base() + '|' + hash;
   let ref = uploadCache.get(key);
   if (!ref) {
-    const ext = (input.blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
-    ref = await api.uploadImage(input.blob, `ainvil_${input.hash}.${ext}`);
+    const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
+    ref = await api.uploadImage(blob, `ainvil_${hash}.${ext}`);
     uploadCache.set(key, ref);
   }
+  return ref;
+}
+function refPath(ref) { return ref.subfolder ? `${ref.subfolder}/${ref.name}` : ref.name; }
+
+async function ensureUploads(mode) {
+  const key = api.base() + '|' + input.hash;
+  let ref = await uploadCached(input.blob, input.hash);
   if (mode === 'inpainting') {
     const mh = maskAlphaHash();
     const mkey = key + '|' + mh;
@@ -1947,7 +2077,7 @@ async function ensureUploads(mode) {
     }
     ref = mref;
   }
-  return ref.subfolder ? `${ref.subfolder}/${ref.name}` : ref.name;
+  return refPath(ref);
 }
 
 /* ---------- generation ---------- */
@@ -1992,9 +2122,9 @@ async function prepare() {
   return { fw, mode, image };
 }
 
-async function waitForPrompt(id) {
+async function waitForPrompt(id, cancelled = () => cancelRequested) {
   for (;;) {
-    if (cancelRequested) throw new Error('Cancelled');
+    if (cancelled()) throw new Error('Cancelled');
     const hist = await api.history(id);
     const entry = hist?.[id];
     if (entry) {
@@ -2012,6 +2142,7 @@ async function waitForPrompt(id) {
 
 async function runGenerate() {
   if (busy) return;
+  if (exBusy) return setStatus('An Extras run is in progress; wait for it or cancel it first.', 'error');
   cancelRequested = false;
   setBusy(true);
   resetGallery();
@@ -2058,7 +2189,10 @@ async function runGenerate() {
 
 async function cancelGenerate() {
   cancelRequested = true;
-  const pending = activeJobs.filter((j) => !j.done).map((j) => j.id);
+  await cancelJobs(activeJobs);
+}
+async function cancelJobs(jobs) {
+  const pending = jobs.filter((j) => !j.done).map((j) => j.id);
   try {
     if (pending.length) await api.deleteQueued(pending);
     await api.interrupt(progress.running || pending[0]);
@@ -2451,6 +2585,289 @@ function closeMaskEditor(apply) {
   me.work = null; me.ctx = null; me.undo = [];
 }
 
+/* ======================================================================
+   Extras tab: running custom workflows
+   ====================================================================== */
+let ex;                       // { cwName, values: {cwName: {param: value}} }, saved in localStorage
+const exImages = {};          // cwName -> image parameter name -> [{ blob, url, name, hash, w, h }] (not saved)
+const exOut = { items: [], sel: 0, render: () => renderExGallery() };
+let exBusy = false, exCancel = false, exJobs = [];
+
+function currentCw() {
+  const list = config.customWorkflows;
+  return list.find((c) => c.name === ex.cwName) || list[0] || null;
+}
+
+function loadExState() {
+  const base = { cwName: config.customWorkflows[0]?.name || '', values: {} };
+  try {
+    const raw = localStorage.getItem(LS_EXTRAS);
+    if (raw) return { ...base, ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return base;
+}
+let exSaveTimer = 0;
+function saveExSoon() {
+  clearTimeout(exSaveTimer);
+  exSaveTimer = setTimeout(() => { try { localStorage.setItem(LS_EXTRAS, JSON.stringify(ex)); } catch {} }, 300);
+}
+
+// Keeps the Extras values and images of a custom workflow when it is renamed.
+function renameCwState(old, nu) {
+  if (old === nu) return;
+  if (ex.cwName === old) ex.cwName = nu;
+  if (ex.values[old] && !ex.values[nu]) { ex.values[nu] = ex.values[old]; delete ex.values[old]; }
+  if (exImages[old] && !exImages[nu]) { exImages[nu] = exImages[old]; delete exImages[old]; }
+  saveExSoon();
+}
+
+function exImageList(cw, cp) { return ((exImages[cw.name] ??= {})[cp.name] ??= []); }
+
+async function addExImages(list, files) {
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) { toast(`${f.name || 'That file'} is not an image.`, 'error'); continue; }
+    const hash = hash53(new Uint8Array(await f.arrayBuffer()));
+    if (list.some((x) => x.hash === hash)) continue;
+    const url = URL.createObjectURL(f);
+    let img;
+    try { img = await loadImage(url); }
+    catch (e) { URL.revokeObjectURL(url); toast(`${f.name}: ${errText(e)}`, 'error'); continue; }
+    list.push({ blob: f, url, name: f.name || 'image.png', hash, w: img.naturalWidth, h: img.naturalHeight });
+  }
+}
+
+function renderExtras() {
+  const sel = $('#cwSelect');
+  sel.replaceChildren(...config.customWorkflows.map((c) => h('option', { value: c.name }, c.name)));
+  if (!config.customWorkflows.length) sel.append(h('option', { value: '' }, '(none configured)'));
+  const cw = currentCw();
+  sel.value = cw?.name || '';
+  if (cw) ex.cwName = cw.name;
+  renderExParams();
+}
+
+function renderExParams() {
+  const cw = currentCw();
+  const box = $('#exParams');
+  if (!cw) return box.replaceChildren(h('p', { class: 'hint full' }, 'No custom workflows are configured. Add one in Configuration › Custom Workflows.'));
+  const vals = (ex.values[cw.name] ??= {});
+  box.replaceChildren(
+    !cw.workflow && h('p', { class: 'hint full' }, 'This custom workflow has no ComfyUI workflow loaded yet (Configuration › Custom Workflows).'),
+    !cw.parameters.length && h('p', { class: 'hint full' }, 'This workflow has no parameters.'),
+    ...cw.parameters.map((cp) => exParamControl(cw, cp, vals)));
+}
+
+function exParamControl(cw, cp, vals) {
+  const hint = cp.hint && h('span', { class: 'hint' }, cp.hint);
+  const v = vals[cp.name] ?? cwDefault(cw, cp) ?? '';
+  const update = (val) => { vals[cp.name] = val; saveExSoon(); };
+  switch (cp.type) {
+    case 'image': return exImageControl(cw, cp, hint);
+    case 'combo': return exComboControl(cw, cp, v, update, hint);
+    case 'int':
+    case 'float':
+      return h('label', {}, cp.name, h('input', {
+        type: 'number', min: cp.min ?? '', max: cp.max ?? '', step: cp.step ?? (cp.type === 'int' ? 1 : 0.01), value: v,
+        oninput: (e) => update(e.target.value === '' ? null : Number(e.target.value)),
+      }), hint);
+    case 'boolean':
+      return h('div', {}, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: v === true || v === 'true', onchange: (e) => update(e.target.checked) }), cp.name), hint);
+    case 'text':
+      return h('label', { class: 'full' }, cp.name, h('textarea', { rows: 3, value: v, spellcheck: false, oninput: (e) => update(e.target.value) }), hint);
+    default:
+      return h('label', {}, cp.name, h('input', { type: 'text', value: v, spellcheck: false, oninput: (e) => update(e.target.value) }), hint);
+  }
+}
+
+// Server lists of files (models, LoRAs…) get a search box on top of the parameter's regex filter, like the model selector.
+function exComboControl(cw, cp, value, update, hint) {
+  const all = cwOptions(cw, cp);
+  const sel = h('select', { onchange: (e) => { value = e.target.value; update(value); } });
+  const searchable = !cp.options?.length && (all?.length > 12 || all?.some((o) => /\.[a-z0-9]{2,12}$/i.test(o)));
+  const search = searchable && h('input', { type: 'search', placeholder: 'Search', spellcheck: false, title: 'Show only names that contain this text', oninput: () => fill() });
+  const fill = () => {
+    const q = search ? search.value : '';
+    fillSelect(sel, all && searchList(filterList(all, cp.filter), q), value, { known: all, emptyLabel: q ? '(no matches)' : undefined });
+  };
+  fill();
+  if (!value && sel.value) { value = sel.value; update(value); }
+  return h('div', {}, h('label', {}, cp.name), searchable ? h('div', { class: 'searchsel' }, sel, search) : sel, hint);
+}
+
+function exImageControl(cw, cp, hint) {
+  const list = exImageList(cw, cp);
+  const grid = h('div', { class: 'imglist' });
+  const count = h('span', { class: 'sub' });
+  const draw = () => {
+    grid.replaceChildren(...list.map((im, i) => h('div', { class: 'im', title: `${im.name} · ${im.w}×${im.h}` },
+      h('img', { src: im.url, alt: im.name }),
+      h('button', { title: 'Remove', onclick: () => { if (exBusy) return; URL.revokeObjectURL(im.url); list.splice(i, 1); draw(); } }, '✕'))));
+    count.textContent = list.length ? `${list.length} image${list.length > 1 ? 's' : ''}` : '';
+  };
+  const add = async (files) => { await addExImages(list, files); draw(); };
+  const pick = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: async (e) => { await add([...e.target.files]); e.target.value = ''; } });
+  const drop = h('div', { class: 'dropbox wide' },
+    h('span', {}, 'Drop images here, or ', h('button', { class: 'link', onclick: () => pick.click() }, 'choose files')));
+  makeDropZone(drop, (f) => add([f]), { multiple: true });
+  draw();
+  return h('div', { class: 'full' },
+    h('label', {}, cp.name, count), drop, pick, grid, hint,
+    h('div', { class: 'actions' }, h('button', {
+      class: 'small',
+      onclick: () => { if (exBusy) return; for (const im of list) URL.revokeObjectURL(im.url); list.length = 0; draw(); },
+    }, 'Clear images')));
+}
+
+function renderExGallery() {
+  const main = $('#exGalleryMain'), thumbs = $('#exThumbs'), info = $('#exGalleryInfo');
+  const items = exOut.items;
+  if (!items.length) {
+    main.replaceChildren(h('div', { class: 'placeholder' }, exBusy ? 'Running…' : 'No images yet'));
+    thumbs.replaceChildren();
+    info.textContent = '';
+    return;
+  }
+  exOut.sel = Math.min(exOut.sel, items.length - 1);
+  const it = items[exOut.sel];
+  const label = `${exOut.sel + 1} / ${items.length}${it.input ? ` · ${it.input}` : ''} · ${it.filename}`;
+  main.replaceChildren(h('img', {
+    src: it.src, alt: it.filename, onclick: () => openViewer(exOut, exOut.sel),
+    onload: (e) => { info.textContent = `${label} · ${e.target.naturalWidth}×${e.target.naturalHeight}`; },
+  }));
+  info.textContent = label;
+  thumbs.replaceChildren(...items.map((x, i) => h('img', {
+    src: x.src, loading: 'lazy', class: i === exOut.sel ? 'sel' : '', alt: x.filename, title: x.input || x.filename,
+    onclick: () => { exOut.sel = i; renderExGallery(); },
+  })));
+}
+function resetExOut() {
+  for (const it of exOut.items) if (it.blob) URL.revokeObjectURL(it.src);
+  exOut.items = [];
+  exOut.sel = 0;
+}
+
+function setExStatus(msg, kind = '') {
+  const s = $('#exStatus');
+  s.textContent = msg;
+  s.className = 'status ' + kind;
+}
+function setExBusy(b) {
+  exBusy = b;
+  $('#btnExRun').disabled = b;
+  $('#btnExWorkflow').disabled = b;
+  $('#btnExCancel').hidden = !b;
+  if (!b) setProgress(0);
+}
+
+// Checks the run and snapshots the image lists. Image parameters with several images make one run per image;
+// a parameter with a single image uses it in every run.
+async function exPrepare() {
+  const cw = currentCw();
+  if (!cw) throw new Error('No custom workflow is configured. Add one in the Configuration tab.');
+  if (!cw.workflow) throw new Error(`"${cw.name}" has no ComfyUI workflow loaded.`);
+  await ensureObjectInfo();
+  const imgParams = cw.parameters.filter((p) => p.type === 'image' && p.mappings.some((tg) => tg.node && tg.input));
+  const lists = imgParams.map((p) => [...exImageList(cw, p)]);
+  imgParams.forEach((p, i) => { if (!lists[i].length) throw new Error(`Add an image to "${p.name}".`); });
+  const count = Math.max(1, ...lists.map((l) => l.length));
+  const multi = imgParams.filter((p, i) => lists[i].length > 1);
+  if (multi.some((p) => lists[imgParams.indexOf(p)].length !== count)) {
+    throw new Error(`${multi.map((p) => `"${p.name}" has ${lists[imgParams.indexOf(p)].length} images`).join(', ')}: give each image parameter either one image or the same number.`);
+  }
+  return { cw, imgParams, lists, count, driver: lists.findIndex((l) => l.length === count) };
+}
+
+// Uploads run i's images and collects its parameters; %input% is the name of the image the run is for.
+async function exRunParams(prep, i) {
+  const images = {};
+  for (const [k, cp] of prep.imgParams.entries()) {
+    const l = prep.lists[k], im = l[l.length > 1 ? i : 0];
+    images[cp.name] = refPath(await uploadCached(im.blob, im.hash));
+  }
+  const name = prep.driver >= 0 ? prep.lists[prep.driver][i].name : '';
+  return {
+    values: ex.values[prep.cw.name] || {},
+    images,
+    vars: { input: name.replace(/\.[^.]*$/, '').replace(/[\\/:*?"<>|%]+/g, '_') },
+    saveImage: config.serverPreferences.saveImage,
+  };
+}
+
+async function runExtras() {
+  if (exBusy) return;
+  if (busy) return setExStatus('A Generate run is in progress; wait for it or cancel it first.', 'error');
+  exCancel = false;
+  setExBusy(true);
+  resetExOut();
+  renderExGallery();
+  try {
+    setExStatus('Preparing…');
+    const prep = await exPrepare();
+    exJobs = [];
+    progress.promptIds.clear();
+    for (let i = 0; i < prep.count; i++) {
+      if (exCancel) break;
+      const p = await exRunParams(prep, i);
+      const prompt = buildCustomPrompt(prep.cw, p);
+      const r = await api.queuePrompt(prompt);
+      exJobs.push({ id: r.prompt_id, input: p.vars.input, outIds: outputNodeIds(prompt, {}) });
+      progress.promptIds.add(r.prompt_id);
+      setExStatus(`Queued ${i + 1} / ${prep.count}`);
+    }
+    for (const [k, job] of exJobs.entries()) {
+      if (exCancel) break;
+      setExStatus(`Running ${k + 1} / ${exJobs.length}${job.input ? ` (${job.input})` : ''}…`);
+      setProgress(0);
+      const outputs = await waitForPrompt(job.id, () => exCancel);
+      job.done = true;
+      const ids = job.outIds.filter((id) => outputs[id]);
+      const imgs = (ids.length ? ids : Object.keys(outputs)).flatMap((id) => outputs[id]?.images || []);
+      for (const im of imgs) exOut.items.push({ ...(await galleryItem(im)), input: job.input });
+      renderExGallery();
+    }
+    setExStatus(exCancel ? 'Cancelled.' : `Done — ${exOut.items.length} image(s).`, exCancel ? '' : 'ok');
+  } catch (e) {
+    console.error(e);
+    const cancelled = errText(e) === 'Cancelled';
+    setExStatus(cancelled ? 'Cancelled.' : errText(e), cancelled ? '' : 'error');
+  } finally {
+    setExBusy(false);
+    renderExGallery();
+  }
+}
+
+async function cancelExtras() {
+  exCancel = true;
+  await cancelJobs(exJobs);
+}
+
+async function extrasWorkflowFile() {
+  if (exBusy) return;
+  try {
+    setExStatus('Building workflow…');
+    const prep = await exPrepare();
+    downloadJSON(buildCustomPrompt(prep.cw, await exRunParams(prep, 0)), `ainvil-${slug(prep.cw.name)}-api.json`);
+    setExStatus('Downloaded the workflow (ComfyUI API format).', 'ok');
+  } catch (e) {
+    setExStatus(errText(e), 'error');
+  }
+}
+
+function clearExtras() {
+  if (exBusy) return toast('Cancel the running workflow first.');
+  const cw = currentCw();
+  if (cw) {
+    delete ex.values[cw.name];
+    for (const l of Object.values(exImages[cw.name] || {})) for (const im of l) URL.revokeObjectURL(im.url);
+    delete exImages[cw.name];
+  }
+  resetExOut();
+  setExStatus('');
+  saveExSoon();
+  renderExParams();
+  renderExGallery();
+}
+
 /* ---------- layout ---------- */
 const LAYOUTS = {
   3: [['sec-main', 'sec-params', 'sec-custom'], ['sec-gallery', 'sec-lora'], ['sec-input', 'sec-inparams', 'sec-cads']],
@@ -2485,6 +2902,7 @@ function cfgDetails(key, summary, ...body) {
 function configChanged({ generate = true } = {}) {
   saveConfig();
   if (generate) { refreshFwSelect(); refreshGenerateOptions(); }
+  renderExtras();
 }
 
 function textField(label, value, onchange, attrs = {}) {
@@ -2586,27 +3004,33 @@ function fwModeEditor(fw, fi, mode) {
       h('td', {}, targetsEditor(slot.mappings, p.key, nodes, p.nodeOnly)))))));
 }
 
-function paramEditor(p, onRemove, mappingsUi) {
-  const optField = h('label', { hidden: p.type !== 'combo' }, 'Options (comma separated; empty = from server)',
+// `custom` (custom workflows) adds the image type, a regex filter for combos, help text, and defaults that fall
+// back to the workflow's value.
+function paramEditor(p, onRemove, mappingsUi, { custom = false } = {}) {
+  const optField = h('label', {}, 'Options (comma separated; empty = from server)',
     h('input', { type: 'text', value: (p.options || []).join(', '), onchange: (e) => { p.options = e.target.value.split(',').map((s) => s.trim()).filter(Boolean); configChanged(); } }));
-  const numFields = ['min', 'max', 'step'].map((k) => h('label', { hidden: !['int', 'float'].includes(p.type) }, k,
+  const filterField = custom && textField('Filter (regex, case-insensitive)', p.filter, (v) => { if (v) p.filter = v; else delete p.filter; configChanged(); });
+  const numFields = ['min', 'max', 'step'].map((k) => h('label', {}, k,
     h('input', { type: 'number', value: p[k] ?? '', onchange: (e) => { if (e.target.value === '') delete p[k]; else p[k] = Number(e.target.value); configChanged(); } })));
+  const defField = textField(custom ? 'Default (empty = value in the workflow)' : 'Default', p.default ?? '', (v) => {
+    p.default = p.type === 'int' || p.type === 'float' ? (v === '' ? null : Number(v)) : p.type === 'boolean' ? v === 'true' : v;
+    configChanged();
+  });
+  const sync = () => {
+    optField.hidden = p.type !== 'combo';
+    if (filterField) filterField.hidden = p.type !== 'combo';
+    numFields.forEach((f) => { f.hidden = !['int', 'float'].includes(p.type); });
+    defField.hidden = p.type === 'image';
+  };
+  sync();
   return h('div', { class: 'param-card' },
     h('div', { class: 'fields', style: 'margin-top:0' },
       textField('Name', p.name, (v) => { p.name = v; configChanged(); }),
       h('label', {}, 'Type', h('select', {
-        onchange: (e) => {
-          p.type = e.target.value;
-          optField.hidden = p.type !== 'combo';
-          numFields.forEach((f) => { f.hidden = !['int', 'float'].includes(p.type); });
-          configChanged();
-        },
-      }, PARAM_TYPES.map((ty) => h('option', { value: ty, selected: ty === p.type }, ty)))),
-      textField('Default', p.default ?? '', (v) => {
-        p.default = p.type === 'int' || p.type === 'float' ? (v === '' ? null : Number(v)) : p.type === 'boolean' ? v === 'true' : v;
-        configChanged();
-      }),
-      optField, ...numFields),
+        onchange: (e) => { p.type = e.target.value; sync(); configChanged(); },
+      }, (custom ? CW_PARAM_TYPES : PARAM_TYPES).map((ty) => h('option', { value: ty, selected: ty === p.type }, ty)))),
+      defField, optField, filterField, ...numFields,
+      custom && textField('Help text', p.hint, (v) => { if (v) p.hint = v; else delete p.hint; configChanged(); })),
     mappingsUi,
     h('div', { class: 'actions' }, h('button', { class: 'small danger', onclick: onRemove }, 'Remove parameter')));
 }
@@ -2653,7 +3077,13 @@ function cwEditor(cw, ci) {
   const nodes = describeNodes(cw.workflow);
   return cfgDetails(`cw:${ci}`,
     h('span', {}, cw.name || '(unnamed)', h('span', { class: 'sub' }, workflowStatus(cw.workflow))),
-    h('div', { class: 'fields' }, textField('Name', cw.name, (v) => { cw.name = v.trim() || 'Unnamed'; configChanged({ generate: false }); renderConfigLists(); })),
+    h('div', { class: 'fields' }, textField('Name', cw.name, (v) => {
+      const old = cw.name;
+      cw.name = v.trim() || 'Unnamed';
+      renameCwState(old, cw.name);
+      configChanged({ generate: false });
+      renderConfigLists();
+    })),
     workflowControls(cw, 'workflow', cw.name),
     h('div', { class: 'actions' },
       h('button', { class: 'small', onclick: () => downloadJSON({ version: CONFIG_VERSION, type: 'customWorkflow', workflow: cw }, `ainvil-custom-${slug(cw.name)}.json`) }, 'Export'),
@@ -2662,7 +3092,8 @@ function cwEditor(cw, ci) {
     h('h3', {}, 'Parameters'),
     cw.parameters.map((p, pi) => paramEditor(p,
       () => { cw.parameters.splice(pi, 1); configChanged({ generate: false }); renderConfigLists(); },
-      cw.workflow ? h('div', { style: 'margin-top:8px' }, h('span', { class: 'hint' }, 'Mapping'), targetsEditor(p, 'mappings', nodes, false)) : h('p', { class: 'hint' }, 'Load a workflow to map this parameter.'))),
+      cw.workflow ? h('div', { style: 'margin-top:8px' }, h('span', { class: 'hint' }, 'Mapping'), targetsEditor(p, 'mappings', nodes, false)) : h('p', { class: 'hint' }, 'Load a workflow to map this parameter.'),
+      { custom: true })),
     h('div', { class: 'actions' }, h('button', {
       class: 'small',
       onclick: () => { cw.parameters.push({ name: 'New parameter', type: 'string', default: '', options: [], mappings: [] }); configChanged({ generate: false }); renderConfigLists(); },
@@ -2692,9 +3123,10 @@ function renderConfig() {
 }
 
 function applyClientPrefs() {
-  const t = $('#galleryThumbs').style;
-  t.setProperty('--cols', config.clientPreferences.galleryColumns);
-  t.setProperty('--rows', config.clientPreferences.galleryRows);
+  for (const el of [$('#galleryThumbs'), $('#exThumbs')]) {
+    el.style.setProperty('--cols', config.clientPreferences.galleryColumns);
+    el.style.setProperty('--rows', config.clientPreferences.galleryRows);
+  }
 }
 
 function uniqueName(name, list) {
@@ -2758,6 +3190,7 @@ async function doImport() {
     renderConfig();
     if (!config.functionalWorkflows.some((f) => f.name === gen.fwName)) gen.fwName = config.functionalWorkflows[0]?.name || '';
     renderGen();
+    renderExtras();
     toast('Configuration imported', 'ok');
     connect({ quiet: true });
   } catch (e) {
@@ -2907,8 +3340,8 @@ function bindGenerate() {
   });
 
   // gallery
-  $('#btnDlSel').addEventListener('click', downloadSelected);
-  $('#btnDlAll').addEventListener('click', downloadAll);
+  $('#btnDlSel').addEventListener('click', () => downloadSelected());
+  $('#btnDlAll').addEventListener('click', () => downloadAll());
   $('#btnUseSeed').addEventListener('click', () => {
     const it = gallery.items[gallery.sel];
     if (!it) return;
@@ -2924,7 +3357,7 @@ function bindGenerate() {
     catch (e) { toast('Could not load the image: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); }
   });
   $('#viewerClose').addEventListener('click', closeViewer);
-  $('#viewerDl').addEventListener('click', downloadSelected);
+  $('#viewerDl').addEventListener('click', () => downloadSelected(viewing));
   $('#viewerLink').addEventListener('click', (e) => e.preventDefault());
   $('#viewerPrev').addEventListener('click', () => stepViewer(-1));
   $('#viewerNext').addEventListener('click', () => stepViewer(1));
@@ -2980,6 +3413,26 @@ function bindGenerate() {
   window.addEventListener('resize', () => { layout(); fitMaskEditor(); });
 }
 
+function bindExtras() {
+  $('#cwSelect').addEventListener('change', (e) => { ex.cwName = e.target.value; renderExParams(); saveExSoon(); });
+  $('#btnExRun').addEventListener('click', runExtras);
+  $('#btnExCancel').addEventListener('click', cancelExtras);
+  $('#btnExClear').addEventListener('click', clearExtras);
+  $('#btnExWorkflow').addEventListener('click', extrasWorkflowFile);
+  $('#btnExDlSel').addEventListener('click', () => downloadSelected(exOut));
+  $('#btnExDlAll').addEventListener('click', () => downloadAll(exOut, 'ainvil-extras'));
+  // Pasted images go to the first image parameter.
+  document.addEventListener('paste', async (e) => {
+    if (!$('#tab-extras').classList.contains('active') || exBusy) return;
+    if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) return;
+    const files = [...(e.clipboardData?.files || [])].filter((x) => x.type.startsWith('image/'));
+    const cw = currentCw(), cp = cw?.parameters.find((p) => p.type === 'image');
+    if (!files.length || !cp) return;
+    await addExImages(exImageList(cw, cp), files);
+    renderExParams();
+  });
+}
+
 function bindConfig() {
   $('#btnSaveUrl').addEventListener('click', () => {
     config.connection.apiUrl = $('#apiUrl').value.trim() || DEFAULT_API;
@@ -3006,6 +3459,7 @@ function bindConfig() {
     saveConfig();
     renderConfig();
     renderGen();
+    renderExtras();
     toast('Configuration reset (connection kept)', 'ok');
   });
   makeDropZone($('#importBox'), stageImport);
@@ -3032,6 +3486,14 @@ function bindConfig() {
     configChanged();
     renderConfigLists();
   });
+  $('#btnCwDefaults').addEventListener('click', () => {
+    const missing = defaultCustomWorkflows().filter((d) => !config.customWorkflows.some((c) => c.name === d.name));
+    if (!missing.length) return toast('All built-in custom workflows are already configured.');
+    config.customWorkflows.push(...missing);
+    configChanged({ generate: false });
+    renderConfigLists();
+    toast(`Added ${missing.map((c) => c.name).join(', ')}`, 'ok');
+  });
   $('#btnAddCw').addEventListener('click', () => {
     config.customWorkflows.push(normalizeCw({ name: uniqueName('New custom workflow', config.customWorkflows) }));
     openKeys.add(`cw:${config.customWorkflows.length - 1}`);
@@ -3043,14 +3505,18 @@ function bindConfig() {
 function init() {
   config = loadConfig();
   gen = loadGenState();
+  ex = loadExState();
   layout();
   bindTabs();
   bindGenerate();
+  bindExtras();
   bindConfig();
   renderConfig();
   renderGen();
+  renderExtras();
   renderInput();
   renderGallery();
+  renderExGallery();
   connect({ quiet: true });
 }
 
