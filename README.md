@@ -21,6 +21,7 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - The **Search** box next to the model list shows only models whose names contain all the words you type.
   - **Clear** resets the page.
   - **Generate Workflow** downloads the ComfyUI API-format workflow for the first image instead of running it.
+  - Drop a PNG made by Ainvil (or ComfyUI with the same workflow) onto the Main section to use it as a template. This loads its prompts, model, generation parameters, LoRAs and custom parameters. For img2img and inpainting it also loads the input image and mask, if they are still in the server's `input/` folder. The seed is loaded with Random turned off. A `%date:…%` filename prefix is kept as the template, not replaced by its expanded value.
 - **Generation Parameters**: resolution presets (1024 / 1536 × Square / Landscape / Portrait, or Custom), seed (with a Random toggle), batch size, steps, CFG, sampler and scheduler.
 - **Input Image**: drop, choose or paste an image to switch to **img2img**.
   - Click the mask box to paint a mask, which switches to **inpainting**.

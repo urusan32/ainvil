@@ -110,6 +110,7 @@ main { padding: var(--gap) 16px 40px; }
 .imgcol .caption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .dropbox { aspect-ratio: 1; border: 2px dashed var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--input); position: relative; }
 .dropbox.drag { border-color: var(--accent); background: var(--sel); }
+#sec-main.drag { outline: 2px dashed var(--accent); outline-offset: -4px; }
 .dropbox img, .dropbox canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .dropbox.clickable { cursor: crosshair; }
 .dropbox.wide { aspect-ratio: auto; min-height: 90px; flex-direction: column; gap: 6px; padding: 12px; text-align: center; }
@@ -601,10 +602,13 @@ function canvasToBlob(c, type = 'image/png') {
   return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed'))), type));
 }
 
-function makeDropZone(el, onFile) {
-  el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drag'); });
+// With textPassThrough, plain-text drags are left alone so text can still be dropped into text boxes.
+function makeDropZone(el, onFile, { textPassThrough = false } = {}) {
+  const wanted = (e) => !textPassThrough || ['Files', 'text/uri-list'].some((ty) => e.dataTransfer.types.includes(ty));
+  el.addEventListener('dragover', (e) => { if (!wanted(e)) return; e.preventDefault(); el.classList.add('drag'); });
   el.addEventListener('dragleave', () => el.classList.remove('drag'));
   el.addEventListener('drop', async (e) => {
+    if (!wanted(e)) return;
     e.preventDefault();
     el.classList.remove('drag');
     const f = e.dataTransfer.files?.[0];
@@ -1992,7 +1996,9 @@ function maskHasContent(c) {
   for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
   return false;
 }
-async function loadMaskFile(blob) {
+// A mask image is white = regenerate; with fromAlpha it's an image whose transparent areas are the mask
+// (how ComfyUI's Load Image reads it).
+async function loadMaskFile(blob, { fromAlpha = false } = {}) {
   if (!input.img) return toast('Load an input image before adding a mask.', 'error');
   let img;
   const url = URL.createObjectURL(blob);
@@ -2004,7 +2010,7 @@ async function loadMaskFile(blob) {
   const p = d.data, rgb = maskRgb();
   for (let i = 0; i < p.length; i += 4) {
     const lum = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
-    const m = Math.round((lum * p[i + 3]) / 255);
+    const m = fromAlpha ? 255 - p[i + 3] : Math.round((lum * p[i + 3]) / 255);
     [p[i], p[i + 1], p[i + 2]] = rgb; p[i + 3] = m;
   }
   ctx.putImageData(d, 0, 0);
@@ -2026,6 +2032,142 @@ async function downloadMask() {
   }
   ctx.putImageData(out, 0, 0);
   downloadBlob(await canvasToBlob(c), (input.name.replace(/\.\w+$/, '') || 'image') + '-mask.png');
+}
+
+/* ---------- load settings from a generated PNG ---------- */
+// ComfyUI's SaveImage embeds the API prompt it ran. We find the functional workflow and mode whose
+// template has the same nodes (node ids survive toApi), then read each mapped input back out.
+const OUTPUT_CLASSES = ['SaveImage', 'PreviewImage'];
+function matchPrompt(a) {
+  let best = null;
+  for (const fw of config.functionalWorkflows) {
+    for (const mode of MODES) {
+      const slot = fw.workflows?.[mode];
+      if (!slot?.workflow) continue;
+      let tmpl;
+      try { tmpl = templateApi(slot.workflow); } catch { continue; }
+      const loraId = (slot.mappings?.lora || []).find((x) => x.node)?.node;
+      const loraClass = tmpl[loraId]?.class_type;
+      const same = (x, y) => x.class_type === y.class_type || (OUTPUT_CLASSES.includes(x.class_type) && OUTPUT_CLASSES.includes(y.class_type));
+      let score = 0;
+      for (const [id, n] of Object.entries(tmpl)) if (id !== loraId) score += a[id] && same(n, a[id]) ? 1 : -1;
+      // Nodes we add ourselves (LoRA clones, RepeatLatentBatch) don't count against a match.
+      for (const [id, n] of Object.entries(a)) {
+        if ((tmpl[id] && id !== loraId) || n.class_type === loraClass || n.class_type === 'RepeatLatentBatch') continue;
+        score--;
+      }
+      if (!best || score > best.score) best = { fw, mode, tmpl, loraId, loraClass, score };
+    }
+  }
+  return best && best.score > 0 ? best : null;
+}
+
+function promptValue(a, m, key) {
+  for (const tg of m[key] || []) {
+    const v = tg.input ? a[tg.node]?.inputs?.[tg.input] : undefined;
+    if (v !== undefined && !Array.isArray(v)) return v;
+  }
+  return undefined;
+}
+
+function promptLoras(a, { tmpl, loraId, loraClass }) {
+  return Object.entries(a)
+    .filter(([id, n]) => n.class_type === loraClass && (id === loraId || !tmpl[id]))
+    .sort(([x], [y]) => Number(x) - Number(y))
+    .map(([, n]) => {
+      const nameKey = 'lora_name' in n.inputs ? 'lora_name' : Object.keys(n.inputs).find((k) => typeof n.inputs[k] === 'string');
+      const strength = Object.keys(n.inputs).find((k) => /^strength/.test(k));
+      return { name: n.inputs[nameKey] ?? '', weight: strength ? Number(n.inputs[strength]) : 1, active: true };
+    });
+}
+
+// True when `v` is what `tmpl` ("%date:yyyyMMdd%/x") expanded to, so the template can be kept.
+function isExpansionOf(tmpl, v) {
+  if (typeof tmpl !== 'string' || !/%[^%]+%/.test(tmpl)) return false;
+  const re = tmpl.split(/%[^%]+%/).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*?');
+  return new RegExp('^' + re + '$').test(String(v));
+}
+
+// Loads the input image (and mask) the prompt used from the server's input folder.
+async function loadPromptImage(ref, mode) {
+  const slash = ref.lastIndexOf('/');
+  const subfolder = slash < 0 ? '' : ref.slice(0, slash), filename = ref.slice(slash + 1);
+  const fetchInput = (name) => fetchBlob(api.viewUrl({ filename: name, subfolder, type: 'input' }));
+  const file = await fetchInput(filename);
+  let image = file, imageName = filename, exact = true;
+  // Our inpainting uploads are "<image>_m<mask hash>.png": the original with alpha = 255 - mask. The browser
+  // loses the RGB under the mask when it decodes that, so take the pixels from the original upload.
+  const orig = mode === 'inpainting' && /^(ainvil_[0-9a-f]+)_m[0-9a-f]+\.png$/.exec(filename);
+  if (orig) {
+    exact = false;
+    for (const ext of ['png', 'jpg', 'webp', 'gif', 'bmp', 'avif']) {
+      try { image = await fetchInput(`${orig[1]}.${ext}`); imageName = `${orig[1]}.${ext}`; exact = true; break; } catch { /* try the next one */ }
+    }
+  }
+  await setInputImage(image, imageName);
+  if (mode === 'inpainting') await loadMaskFile(file, { fromAlpha: true });
+  else { input.mask = null; renderInput(); }
+  if (!exact) toast('The original of the inpainting input is gone from the server, so the image under the mask may be black.');
+}
+
+async function loadSettingsFromPng(file) {
+  if (busy) return toast('Cancel the running generation first.');
+  let a;
+  try { a = JSON.parse((await readPngText(file)).prompt || 'null'); }
+  catch (e) { return toast('Could not read the image metadata: ' + errText(e), 'error'); }
+  if (!isApiWorkflow(a)) return toast('This image has no ComfyUI prompt metadata.', 'error');
+  try { await ensureObjectInfo(); } catch { /* UI-format templates still convert without it */ }
+  const match = matchPrompt(a);
+  if (!match) return toast('This image does not match any configured functional workflow.', 'error');
+  const { fw, mode } = match;
+  const m = fw.workflows[mode].mappings || {};
+  const set = (gk, key, xf = (v) => v) => { const v = promptValue(a, m, key); if (v !== undefined) gen[gk] = xf(v); };
+
+  gen.fwName = fw.name;
+  set('model', 'model');
+  set('prompt', 'prompt');
+  set('negative', 'negative');
+  set('width', 'width', Number);
+  set('height', 'height', Number);
+  gen.resCustom = false;
+  set('seed', 'seed', Number);
+  if (promptValue(a, m, 'seed') !== undefined) gen.randomSeed = false;
+  set('steps', 'steps', Number);
+  set('cfg', 'cfg', Number);
+  set('sampler', 'sampler_name');
+  set('scheduler', 'scheduler');
+  set('batchSize', 'batch_size', Number);
+  for (const tg of m.batch_repeat || []) {
+    const src = a[tg.node]?.inputs?.[tg.input];
+    if (!Array.isArray(src)) continue;
+    const rep = a[src[0]];
+    gen.batchSize = rep?.class_type === 'RepeatLatentBatch' ? Number(rep.inputs.amount) || 1 : 1;
+  }
+  if (mode !== 'txt2img') {
+    set('denoiseStep', 'denoise', (d) => Math.round((1 - Number(d)) * clampInt(gen.steps, 1, 10000)));
+    set('crop', 'crop', (v) => v === true || v === 'center');
+    set('noiseMask', 'noise_mask', Boolean);
+  }
+  if (match.loraClass) gen.loras = promptLoras(a, match);
+  const vals = (gen.custom[fw.name] ??= {});
+  for (const cp of fw.customParameters || []) {
+    for (const tg of cp.mappings?.[mode] || []) {
+      const v = tg.input ? a[tg.node]?.inputs?.[tg.input] : undefined;
+      if (v === undefined || Array.isArray(v)) continue;
+      if (!isExpansionOf(vals[cp.name] ?? cp.default, v) && !isExpansionOf(match.tmpl[tg.node]?.inputs?.[tg.input], v)) vals[cp.name] = v;
+      break;
+    }
+  }
+  renderGen();
+  saveGenSoon();
+
+  const ref = promptValue(a, m, 'image');
+  if (mode === 'txt2img') clearInputImage();
+  else if (typeof ref === 'string' && ref) {
+    try { await loadPromptImage(ref, mode); }
+    catch (e) { toast(`Could not load the input image "${ref}" from the server: ${errText(e)}`, 'error'); }
+  }
+  setStatus(`Loaded settings from ${file.name} (${fw.name}, ${mode}).`, 'ok');
 }
 
 /* ---------- mask editor ---------- */
@@ -2589,6 +2731,8 @@ function bindGenerate() {
   $('#viewerPrev').addEventListener('click', () => stepViewer(-1));
   $('#viewerNext').addEventListener('click', () => stepViewer(1));
   $('#viewer').addEventListener('click', (e) => { if (e.target.id === 'viewer') closeViewer(); });
+
+  makeDropZone($('#sec-main'), loadSettingsFromPng, { textPassThrough: true });
 
   // input image
   makeDropZone($('#inputBox'), (f) => setInputImage(f, f.name));
