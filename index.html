@@ -117,6 +117,11 @@ main { padding: var(--gap) 16px 40px; }
 .dropbox.wide { aspect-ratio: auto; min-height: 90px; flex-direction: column; gap: 6px; padding: 12px; text-align: center; }
 input[type=range] { width: 100%; margin-top: 10px; accent-color: var(--accent); }
 .checks { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+.focus-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.focus-row .seg button { padding: 4px 10px; }
+.focus-row .inline { display: flex; align-items: center; gap: 6px; color: var(--fg); font-size: 13px; }
+.focus-row .inline input { width: 80px; margin: 0; }
+.focus-row[hidden], .focus-row [hidden] { display: none; }
 
 .lora-list { display: flex; flex-direction: column; gap: 6px; min-height: calc(8 * 36px); }
 .lora-row { display: grid; grid-template-columns: auto 1fr 80px auto; gap: 6px; align-items: center; }
@@ -157,9 +162,14 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 .prefs .row { align-items: center; }
 .mask-toolbar .spacer { flex: 1; }
 .mask-stage { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
-.mask-wrap { position: relative; }
+.mask-wrap { position: relative; overflow: hidden; }
 .mask-wrap img, .mask-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .mask-wrap canvas { opacity: .55; touch-action: none; cursor: none; }
+/* Focused inpainting's context window: the outside is dimmed; the corner handles show with the Window tool. */
+.ctx-box { position: absolute; z-index: 1; pointer-events: none; outline: 2px dashed #fff; box-shadow: 0 0 0 1px #000, 0 0 0 9999px rgba(0,0,0,.35); }
+.ctx-box i { position: absolute; width: 12px; height: 12px; background: #fff; border: 1px solid #000; transform: translate(-50%, -50%); display: none; }
+.ctx-box.edit i { display: block; }
+.ctx-box .ne, .ctx-box .se { left: 100%; } .ctx-box .sw, .ctx-box .se { top: 100%; }
 .dialog { background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius); width: min(960px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; box-sizing: border-box; }
 .dialog-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dialog-head h2 { margin: 0; }
@@ -351,8 +361,21 @@ table.map td:first-child .hint { display: block; }
       </div>
       <input type="range" id="denoiseSlider" min="0" max="30" step="1" aria-label="Denoise (right = more denoise)">
       <div class="checks">
-        <label class="chk"><input type="checkbox" id="crop"> Crop</label>
+        <label class="chk" id="cropLabel"><input type="checkbox" id="crop"> Crop</label>
         <label class="chk"><input type="checkbox" id="noiseMask"> Noise Mask</label>
+      </div>
+      <div class="focus-row">
+        <span class="hint">Inpaint area</span>
+        <div class="seg" id="inpaintArea">
+          <button data-area="whole" title="Resize the whole image to the generation size and inpaint it">Whole Image</button><button data-area="focused" title="Inpaint only a context window around the mask, at the full generation size, and paste the result back into the image. Also known as &quot;Only Masked&quot;.">Focused</button>
+        </div>
+      </div>
+      <div class="focus-row" id="ctxRow">
+        <span class="hint">Context window</span>
+        <div class="seg" id="ctxModes">
+          <button data-ctx="auto" title="The mask's bounding box plus a border of Context window size pixels, widened to the generation aspect ratio">By Size</button><button data-ctx="manual" title="Place the window yourself in the mask editor (Window tool); it keeps the generation aspect ratio">Manual Select</button>
+        </div>
+        <label class="inline" id="ctxBorderBox" title="Border around the mask, in image pixels">Context window size <input id="ctxBorder" type="number" min="0" max="4096" step="8"> px</label>
       </div>
       <p class="hint" id="inparamsHint"></p>
     </section>
@@ -466,6 +489,12 @@ table.map td:first-child .hint { display: block; }
       <h2>Server Preferences</h2>
       <label class="chk"><input type="checkbox" id="cfgSaveImage"> Save Image</label>
       <span class="hint"> — save outputs on the server. When off, images are returned through the API as unsaved previews.</span>
+      <h3>Scaling</h3>
+      <div class="grid2">
+        <label>Resize method <select id="cfgScaleMethod"></select></label>
+        <label>Upscale model <select id="cfgUpscaleModel"></select></label>
+      </div>
+      <p class="hint">Used whenever Ainvil resizes an image behind the scenes: the input image to the generation size (img2img and inpainting), and Focused inpainting's context window and paste-back. When an image gets bigger and an upscale model is chosen, the model upscales it first and the resize method then brings it to the exact size. Shrinking always uses the resize method alone.</p>
     </section>
 
     <section class="card">
@@ -539,18 +568,19 @@ table.map td:first-child .hint { display: block; }
 <!-- Mask editor -->
 <div id="maskEditor" class="overlay" hidden>
   <div class="mask-toolbar">
-    <div class="seg"><button id="mePaint" class="on">Paint</button><button id="meErase">Erase</button></div>
+    <div class="seg"><button id="mePaint" class="on">Paint</button><button id="meErase">Erase</button><button id="meWindow" title="Context window (W): drag inside to move, drag a corner to resize, drag outside to draw a new one; the mouse wheel resizes">Window</button></div>
     <label>Brush <input type="range" id="meSize" min="2" max="300" value="40"></label>
     <label title="Mask display color (doesn't change the mask)">Color <input type="color" id="meColor"></label>
     <button id="meUndo" title="Undo (Ctrl+Z)">Undo</button>
     <button id="meInvert">Invert</button>
     <button id="meFill">Fill</button>
     <button id="meClear">Clear</button>
+    <span id="meCtxInfo" class="hint"></span>
     <span class="spacer"></span>
     <button id="meCancel">Cancel</button>
     <button id="meDone" class="primary">Done</button>
   </div>
-  <div class="mask-stage" id="meStage"><div class="mask-wrap" id="meWrap"><img id="meImg" alt=""></div></div>
+  <div class="mask-stage" id="meStage"><div class="mask-wrap" id="meWrap"><img id="meImg" alt=""><div id="meCtx" class="ctx-box" hidden><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div>
   <div class="brush-ring" id="meRing" hidden></div>
 </div>
 
@@ -594,6 +624,7 @@ const FPARAMS = [
   { key: 'denoise', label: 'Denoise' },
   { key: 'image', label: 'Input image', modes: ['img2img', 'inpainting'], hint: 'Load Image input (the mask is sent as the image alpha channel)' },
   { key: 'crop', label: 'Crop', modes: ['img2img', 'inpainting'], hint: 'Combo inputs get "center"/"disabled"' },
+  { key: 'resize', label: 'Resize node', modes: ['img2img', 'inpainting'], nodeOnly: true, hint: 'Node that resizes the input image to Width × Height (ImageScale); gets the Server Preferences › Scaling method and upscale model' },
   { key: 'noise_mask', label: 'Noise mask', modes: ['inpainting'] },
   { key: 'lora', label: 'LoRA template', nodeOnly: true, hint: 'Sample LoRA loader node; cloned and chained once per LoRA (removed when none)' },
   { key: 'output', label: 'Output image', nodeOnly: true, hint: 'Save Image node(s); swapped for Preview Image when Save Image is off' },
@@ -823,7 +854,7 @@ function defaultFw(name, wfs, extraParams = []) {
   };
   const withImage = {
     ...common, width: [t(53, 'width')], height: [t(53, 'height')],
-    batch_repeat: [t(19, 'latent_image')], image: [t(51, 'image')], crop: [t(53, 'crop')],
+    batch_repeat: [t(19, 'latent_image')], image: [t(51, 'image')], crop: [t(53, 'crop')], resize: [t(53)],
   };
   const all = (node, input) => Object.fromEntries(MODES.map((m) => [m, [t(node, input)]]));
   return {
@@ -836,9 +867,6 @@ function defaultFw(name, wfs, extraParams = []) {
       inpainting: { workflow: wfs?.inpainting || null, mappings: { ...clone(withImage), noise_mask: [t(60, 'noise_mask')] } },
     },
     customParameters: [{
-      name: 'Resize method', type: 'combo', default: 'lanczos', options: [],
-      mappings: { img2img: [t(53, 'upscale_method')], inpainting: [t(53, 'upscale_method')] },
-    }, {
       name: 'Filename prefix', type: 'string', default: `%date:yyyyMMdd%/${name}_%date:yyyyMMdd%`, options: [],
       mappings: all(46, 'filename_prefix'),
     }, ...extraParams.map(({ node, input, ...p }) => ({ options: [], ...p, mappings: all(node, input) }))],
@@ -880,7 +908,7 @@ function defaultConfig() {
     version: CONFIG_VERSION,
     connection: { apiUrl: DEFAULT_API },
     serverFeatures: { cads: false, livePreview: false },
-    serverPreferences: { saveImage: true },
+    serverPreferences: normalizeServerPrefs({}),
     clientPreferences: normalizeClientPrefs({}),
     functionalWorkflows: [
       defaultFw('Anima', wfs.Anima),
@@ -958,6 +986,15 @@ function normalizeCw(cw, where = 'custom workflow') {
   };
 }
 
+// scaleMethod (an ImageScale upscale_method) and upscaleModel ('' = none) are used for every resize Ainvil controls.
+function normalizeServerPrefs(p) {
+  return {
+    saveImage: p?.saveImage !== false,
+    scaleMethod: String(p?.scaleMethod || 'lanczos'),
+    upscaleModel: String(p?.upscaleModel || ''),
+  };
+}
+
 function normalizeClientPrefs(p) {
   const cols = Number(p?.galleryColumns), rows = Number(p?.galleryRows);
   return {
@@ -974,7 +1011,7 @@ function normalizeConfig(c) {
     version: CONFIG_VERSION,
     connection: { apiUrl: String(c.connection?.apiUrl || DEFAULT_API) },
     serverFeatures: { cads: !!c.serverFeatures?.cads, livePreview: !!c.serverFeatures?.livePreview },
-    serverPreferences: { saveImage: c.serverPreferences?.saveImage !== false },
+    serverPreferences: normalizeServerPrefs(c.serverPreferences),
     clientPreferences: normalizeClientPrefs(c.clientPreferences),
     functionalWorkflows: (c.functionalWorkflows || []).map((f, i) => normalizeFw(f, `functionalWorkflows[${i}]`)),
     customWorkflows: (c.customWorkflows || []).map((f, i) => normalizeCw(f, `customWorkflows[${i}]`)),
@@ -1092,6 +1129,7 @@ async function connect({ quiet = false } = {}) {
     refreshGenerateOptions();
     renderExtras();
     renderConfigLists();
+    renderScalePrefs();
     return stats;
   } catch (e) {
     connected = false;
@@ -1363,6 +1401,7 @@ function autoDetectMappings(wf, mode) {
     if (scale) {
       if (!latent) { add('width', scale[0], 'width'); add('height', scale[0], 'height'); }
       if ('crop' in scale[1].inputs) add('crop', scale[0], 'crop');
+      add('resize', scale[0]);
     }
     const nm = ent.find(([, n]) => 'noise_mask' in n.inputs);
     if (nm && mode === 'inpainting') add('noise_mask', nm[0], 'noise_mask');
@@ -1481,6 +1520,81 @@ function saveToPreview(a, ids) {
   }
 }
 
+// Titles of the nodes buildPrompt adds for scaling and Focused inpainting. matchPrompt ignores them, and Load from PNG
+// reads the context window back from them.
+const AINVIL_NODES = {
+  upscaleModel: 'Ainvil upscale model', modelUpscale: 'Ainvil model upscale', scaleBack: 'Ainvil scale back',
+  original: 'Ainvil original image', repeat: 'Ainvil repeat original', paste: 'Ainvil paste back',
+};
+const isAinvilNode = (n) => /^Ainvil /.test(n?._meta?.title || '');
+const enlarges = (from, to) => to.w > from.w || to.h > from.h;
+
+// Runs `ref` through the upscale model (one loader per prompt) and returns the upscaled image.
+function addModelUpscale(a, ref, model) {
+  const id = nextNodeId(a);
+  let loader = Object.keys(a).find((k) => a[k]._meta?.title === AINVIL_NODES.upscaleModel && a[k].inputs.model_name === model);
+  if (!loader) a[loader = id()] = { class_type: 'UpscaleModelLoader', inputs: { model_name: model }, _meta: { title: AINVIL_NODES.upscaleModel } };
+  const up = id();
+  a[up] = { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: [loader, 0], image: ref }, _meta: { title: AINVIL_NODES.modelUpscale } };
+  return [up, 0];
+}
+
+// Resizes `ref` from `from` to `to` ({w, h}) with the Scaling preferences: the upscale model first when it gets bigger,
+// then ImageScale to the exact size. Nothing is added when the size already matches.
+function addScale(a, ref, from, to, scale, title) {
+  if (from.w === to.w && from.h === to.h) return ref;
+  const src = scale.model && enlarges(from, to) ? addModelUpscale(a, ref, scale.model) : ref;
+  const id = nextNodeId(a)();
+  a[id] = { class_type: 'ImageScale', inputs: { image: src, upscale_method: scale.method || 'lanczos', width: to.w, height: to.h, crop: 'disabled' }, _meta: { title } };
+  return [id, 0];
+}
+
+// The mapped resize node gets the preferred method, and the upscale model in front of it when it enlarges the image.
+// At the same size it stays as it is: ImageScale passes the image through unchanged then.
+function applyResize(a, nodeId, from, scale) {
+  const n = a[nodeId];
+  if (!n) throw new Error(`Mapping "resize" points at node #${nodeId}, which is not in the workflow.`);
+  const methods = comboOptions(specFor(n.class_type, 'upscale_method'));
+  if ('upscale_method' in n.inputs && scale.method && (!methods || methods.includes(scale.method))) n.inputs.upscale_method = scale.method;
+  const key = Array.isArray(n.inputs.image) ? 'image' : Object.keys(n.inputs).find((k) => Array.isArray(n.inputs[k]));
+  const to = { w: Number(n.inputs.width) || 0, h: Number(n.inputs.height) || 0 };
+  if (scale.model && key && from && enlarges(from, to)) n.inputs[key] = addModelUpscale(a, n.inputs[key], scale.model);
+}
+
+// Focused inpainting: the workflow ran on the context window's crop (p.focus = {x, y, w, h, original}), so its output
+// images are scaled back to the window's size and pasted, through the crop's mask, into the original image.
+function addPasteBack(a, m, outIds, p) {
+  const f = p.focus;
+  const load = (m.image || []).find((x) => x.node && a[x.node])?.node;
+  const maskSlot = (OI?.[a[load]?.class_type]?.output || ['IMAGE', 'MASK']).indexOf('MASK');
+  const id = nextNodeId(a);
+  let dest = id();
+  a[dest] = { class_type: 'LoadImage', inputs: { image: f.original }, _meta: { title: AINVIL_NODES.original } };
+  dest = [dest, 0];
+  if (p.batch_size > 1) {
+    const r = id();
+    a[r] = { class_type: 'RepeatImageBatch', inputs: { image: dest, amount: p.batch_size }, _meta: { title: AINVIL_NODES.repeat } };
+    dest = [r, 0];
+  }
+  const pasted = new Map();
+  for (const oid of outIds) {
+    const ref = a[oid].inputs.images;
+    if (!Array.isArray(ref)) continue;
+    const k = ref.join(':');
+    if (!pasted.has(k)) {
+      const back = addScale(a, ref, { w: p.width, h: p.height }, { w: f.w, h: f.h }, p.scale, AINVIL_NODES.scaleBack);
+      const pid = nextNodeId(a)();
+      a[pid] = {
+        class_type: 'ImageCompositeMasked',
+        inputs: { destination: dest, source: back, x: f.x, y: f.y, resize_source: false, ...(load && maskSlot >= 0 ? { mask: [load, maskSlot] } : {}) },
+        _meta: { title: AINVIL_NODES.paste },
+      };
+      pasted.set(k, [pid, 0]);
+    }
+    a[oid].inputs.images = pasted.get(k);
+  }
+}
+
 function buildPrompt(fw, mode, p) {
   const slot = fw.workflows?.[mode];
   if (!slot?.workflow) throw new Error(`"${fw.name}" has no ${mode} workflow configured.`);
@@ -1536,6 +1650,11 @@ function buildPrompt(fw, mode, p) {
   if (p.batch_size > 1) for (const tg of m.batch_repeat || []) if (tg.node && tg.input) insertRepeat(a, tg, p.batch_size);
   const loraT = (m.lora || []).find((x) => x.node);
   if (loraT) applyLoras(a, loraT.node, p.loras || []);
+  // After the custom parameters, so the Scaling preferences win over an old "Resize method" parameter.
+  if (mode !== 'txt2img') {
+    for (const tg of m.resize || []) if (tg.node) applyResize(a, tg.node, p.src, p.scale || {});
+    if (p.focus) addPasteBack(a, m, outputNodeIds(a, m), p);
+  }
   expandFilenamePrefixes(a);
   if (!p.saveImage) saveToPreview(a, outputNodeIds(a, m));
   return a;
@@ -1663,7 +1782,8 @@ function searchList(list, query) {
    Generate tab state
    ====================================================================== */
 let gen;
-const input = { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null };
+// maskBounds: the mask's painted area ({x, y, w, h}); ctxBox: the Manual Select context window (float pixels).
+const input = { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null, maskBounds: null, ctxBox: null };
 const gallery = { items: [], sel: 0, preview: null, previewPending: null, picked: false, render: () => renderGallery() };
 const uploadCache = new Map();
 let busy = false, cancelRequested = false, activeJobs = [];
@@ -1695,6 +1815,9 @@ function genDefaults(fw) {
     denoiseStep: Math.round(steps * 0.4),
     crop: false,
     noiseMask: true,
+    inpaintMode: 'whole',
+    ctxMode: 'auto',
+    ctxBorder: 32,
     loras: [],
     custom: {},
     cads: cadsDefaults(d, steps),
@@ -1806,7 +1929,7 @@ function renderGen() {
   $('#noiseMask').checked = gen.noiseMask;
   renderRes();
   renderDenoise();
-  renderMode();
+  renderFocus();
 }
 
 function matchRes(w, h) {
@@ -1825,6 +1948,7 @@ function setRes(profile, ratio) {
   gen.width = w; gen.height = hh; gen.resCustom = false;
   $('#width').value = w; $('#height').value = hh;
   renderRes();
+  renderFocus();
   saveGenSoon();
 }
 
@@ -1848,13 +1972,32 @@ function renderMode() {
   const b = $('#modeBadge');
   b.textContent = mode;
   b.className = 'badge ' + mode;
-  const hint = {
+  let hint = {
     txt2img: 'No input image: txt2img mode uses an empty latent and denoise 1.00 (step 0).',
     img2img: 'Input image loaded: img2img mode. Denoise starts sampling at the denoise step.',
     inpainting: 'Image and mask loaded: inpainting mode. Painted areas are regenerated.',
   }[mode];
+  const focused = mode === 'inpainting' && gen.inpaintMode === 'focused';
+  if (focused) {
+    const b = ctxBox(), s = genSize();
+    hint += ` Focused: the ${b.w}×${b.h} context window at (${b.x}, ${b.y}) is inpainted at ${s.w}×${s.h}, then scaled back and pasted into the image.`;
+    if (!boxContains(b, input.maskBounds)) hint += ' Part of the mask is outside the context window and stays as it is.';
+  }
   $('#inparamsHint').textContent = hint;
+  $('#crop').disabled = focused;
+  $('#cropLabel').title = focused ? 'Focused inpainting resizes the whole context window, so it never crops' : '';
   renderCads();
+}
+
+// The inpaint area controls; the context window shows on the mask box and in the hint.
+function renderFocus() {
+  $$('#inpaintArea button').forEach((b) => b.classList.toggle('on', b.dataset.area === gen.inpaintMode));
+  $$('#ctxModes button').forEach((b) => b.classList.toggle('on', b.dataset.ctx === gen.ctxMode));
+  $('#ctxRow').hidden = gen.inpaintMode !== 'focused';
+  $('#ctxBorderBox').hidden = gen.ctxMode !== 'auto';
+  if (document.activeElement !== $('#ctxBorder')) $('#ctxBorder').value = gen.ctxBorder;
+  renderMaskBox();
+  renderMode();
 }
 
 function renderCustomParams() {
@@ -2083,8 +2226,7 @@ function setBusy(b) {
 }
 
 /* ---------- uploads ---------- */
-function maskAlphaHash() {
-  const c = input.mask;
+function maskAlphaHash(c) {
   const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
   const a = new Uint8Array(d.length / 4);
   for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3];
@@ -2092,8 +2234,7 @@ function maskAlphaHash() {
 }
 
 // Mask for ComfyUI's /upload/mask: alpha 0 where we inpaint.
-async function serverMaskBlob() {
-  const src = input.mask;
+async function serverMaskBlob(src) {
   const c = h('canvas', { width: src.width, height: src.height });
   const ctx = c.getContext('2d');
   const sd = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
@@ -2116,25 +2257,45 @@ async function uploadCached(blob, hash) {
 }
 function refPath(ref) { return ref.subfolder ? `${ref.subfolder}/${ref.name}` : ref.name; }
 
-async function ensureUploads(mode) {
-  const key = api.base() + '|' + input.hash;
-  let ref = await uploadCached(input.blob, input.hash);
-  if (mode === 'inpainting') {
-    const mh = maskAlphaHash();
-    const mkey = key + '|' + mh;
-    let mref = uploadCache.get(mkey);
-    if (!mref) {
-      mref = await api.uploadMask(await serverMaskBlob(), `ainvil_${input.hash}_m${mh}.png`, ref);
-      uploadCache.set(mkey, mref);
-    }
-    ref = mref;
+// The image upload `ref` (content hash `hash`) with `mask` applied, as input/ainvil/ainvil_<hash>_m<mask hash>.png.
+async function uploadMaskCached(ref, hash, mask) {
+  const mh = maskAlphaHash(mask);
+  const key = api.base() + '|' + hash + '|' + mh;
+  let mref = uploadCache.get(key);
+  if (!mref) {
+    mref = await api.uploadMask(await serverMaskBlob(mask), `ainvil_${hash}_m${mh}.png`, ref);
+    uploadCache.set(key, mref);
   }
-  return refPath(ref);
+  return mref;
+}
+
+function cropCanvas(src, b) {
+  const c = h('canvas', { width: b.w, height: b.h });
+  c.getContext('2d').drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+  return c;
+}
+
+// Returns {image: uploaded path, src: its size, focus}. Focused inpainting uploads the context window's crop of the
+// image and mask; focus then holds the window and the uploaded original to paste the result into.
+async function ensureUploads(mode) {
+  const ref = await uploadCached(input.blob, input.hash);
+  const whole = { w: input.w, h: input.h };
+  if (mode === 'img2img') return { image: refPath(ref), src: whole, focus: null };
+  if (gen.inpaintMode !== 'focused') return { image: refPath(await uploadMaskCached(ref, input.hash, input.mask)), src: whole, focus: null };
+  const b = ctxBox();
+  const mask = cropCanvas(input.mask, b);
+  if (!maskBounds(mask)) throw new Error('The context window contains none of the mask. Move it over the masked area (mask editor › Window).');
+  const blob = await canvasToBlob(cropCanvas(input.img, b));
+  const hash = hash53(new Uint8Array(await blob.arrayBuffer()));
+  const cref = await uploadMaskCached(await uploadCached(blob, hash), hash, mask);
+  return { image: refPath(cref), src: { w: b.w, h: b.h }, focus: { ...b, original: refPath(ref) } };
 }
 
 /* ---------- generation ---------- */
-function collectParams(mode, seed, image) {
+// `up` is ensureUploads()' result (null in txt2img).
+function collectParams(mode, seed, up) {
   const fw = currentFw();
+  const sp = config.serverPreferences;
   return {
     model: gen.model,
     prompt: gen.prompt,
@@ -2148,9 +2309,13 @@ function collectParams(mode, seed, image) {
     sampler_name: gen.sampler,
     scheduler: gen.scheduler,
     denoise: mode === 'txt2img' ? 1 : denoiseValue(),
-    image,
-    crop: !!gen.crop,
+    image: up?.image,
+    src: up?.src,
+    focus: up?.focus || null,
+    // Focused inpainting pastes back the whole resized window, so it must not be cropped.
+    crop: !!gen.crop && !up?.focus,
     noise_mask: !!gen.noiseMask,
+    scale: { method: sp.scaleMethod, model: sp.upscaleModel },
     loras: gen.loras.filter((l) => l.name && l.active !== false),
     custom: gen.custom[fw?.name] || {},
     cads: cadsActive(fw, mode) ? gen.cads : null,
@@ -2170,8 +2335,8 @@ async function prepare() {
   const mode = currentMode();
   if (!fw.workflows?.[mode]?.workflow) throw new Error(`"${fw.name}" has no ${mode} workflow configured.`);
   await ensureObjectInfo();
-  const image = mode === 'txt2img' ? null : await ensureUploads(mode);
-  return { fw, mode, image };
+  const up = mode === 'txt2img' ? null : await ensureUploads(mode);
+  return { fw, mode, up };
 }
 
 async function waitForPrompt(id, cancelled = () => cancelRequested) {
@@ -2201,14 +2366,14 @@ async function runGenerate() {
   renderGallery();
   try {
     setStatus('Preparing…');
-    const { fw, mode, image } = await prepare();
+    const { fw, mode, up } = await prepare();
     const count = clampInt(gen.batchCount, 1, 128, 1);
     const seeds = seedList(count);
     activeJobs = [];
     progress.promptIds.clear();
     for (let i = 0; i < count; i++) {
       if (cancelRequested) break;
-      const prompt = buildPrompt(fw, mode, collectParams(mode, seeds[i], image));
+      const prompt = buildPrompt(fw, mode, collectParams(mode, seeds[i], up));
       const r = await api.queuePrompt(prompt);
       activeJobs.push({ id: r.prompt_id, seed: seeds[i] });
       progress.promptIds.add(r.prompt_id);
@@ -2255,8 +2420,8 @@ async function generateWorkflowFile() {
   if (busy) return;
   try {
     setStatus('Building workflow…');
-    const { fw, mode, image } = await prepare();
-    const prompt = buildPrompt(fw, mode, collectParams(mode, seedList(1)[0], image));
+    const { fw, mode, up } = await prepare();
+    const prompt = buildPrompt(fw, mode, collectParams(mode, seedList(1)[0], up));
     downloadJSON(prompt, `ainvil-${slug(fw.name)}-${mode}-api.json`);
     setStatus(`Downloaded the ${mode} workflow (ComfyUI API format).`, 'ok');
   } catch (e) {
@@ -2284,18 +2449,19 @@ async function setInputImage(blob, name = 'image') {
   let img;
   try { img = await loadImage(url); }
   catch (e) { URL.revokeObjectURL(url); return toast(errText(e), 'error'); }
-  const keepMask = input.mask && input.mask.width === img.naturalWidth && input.mask.height === img.naturalHeight;
+  // The mask and context window stay when the new image has the same size (e.g. iterating on a result).
+  const keep = input.img && input.w === img.naturalWidth && input.h === img.naturalHeight;
   if (input.url) URL.revokeObjectURL(input.url);
   Object.assign(input, {
     blob, url, img, name, w: img.naturalWidth, h: img.naturalHeight,
     hash: hash53(new Uint8Array(await blob.arrayBuffer())),
-    mask: keepMask ? input.mask : null,
+    mask: keep ? input.mask : null, maskBounds: keep ? input.maskBounds : null, ctxBox: keep ? input.ctxBox : null,
   });
   renderInput();
 }
 function clearInputImage() {
   if (input.url) URL.revokeObjectURL(input.url);
-  Object.assign(input, { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null });
+  Object.assign(input, { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null, maskBounds: null, ctxBox: null });
   renderInput();
 }
 function renderInput() {
@@ -2320,6 +2486,17 @@ function renderMaskBox() {
   if (input.mask) {
     ctx.globalAlpha = 0.6;
     ctx.drawImage(input.mask, 0, 0, c.width, c.height);
+    const b = gen.inpaintMode === 'focused' && ctxBox();
+    if (b) {
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      for (const [color, offset] of [['#000', 5], ['#fff', 0]]) {
+        ctx.strokeStyle = color;
+        ctx.lineDashOffset = offset;
+        ctx.strokeRect(b.x * scale + 1, b.y * scale + 1, Math.max(1, b.w * scale - 2), Math.max(1, b.h * scale - 2));
+      }
+    }
     box.replaceChildren(c);
   } else {
     ctx.fillStyle = 'rgba(0,0,0,.55)';
@@ -2349,22 +2526,37 @@ function setMaskColor(hex, { save = true } = {}) {
   if (me.work && me.work !== input.mask) recolorMask(me.work);
   renderMaskBox();
 }
-function maskHasContent(c) {
-  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-  for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
-  return false;
+// Bounding box of the mask's painted pixels, or null when it's empty.
+function maskBounds(c) {
+  const { width: w, height: hh } = c;
+  const d = c.getContext('2d').getImageData(0, 0, w, hh).data;
+  let x0 = w, y0 = hh, x1 = -1, y1 = -1;
+  for (let y = 0, i = 3; y < hh; y++) {
+    for (let x = 0; x < w; x++, i += 4) {
+      if (!d[i]) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      y1 = y;
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+// Sets or clears the mask; an empty mask counts as none.
+function setMask(c) {
+  const b = c && maskBounds(c);
+  input.mask = b ? c : null;
+  input.maskBounds = b;
+  renderMaskBox();
+  renderMode();
 }
 // A mask image is white = regenerate; with fromAlpha it's an image whose transparent areas are the mask
-// (how ComfyUI's Load Image reads it).
-async function loadMaskFile(blob, { fromAlpha = false } = {}) {
-  if (!input.img) return toast('Load an input image before adding a mask.', 'error');
-  let img;
-  const url = URL.createObjectURL(blob);
-  try { img = await loadImage(url); } catch (e) { return toast(errText(e), 'error'); } finally { URL.revokeObjectURL(url); }
-  const c = h('canvas', { width: input.w, height: input.h });
+// (how ComfyUI's Load Image reads it). Returns a mask canvas of w×h.
+function maskFromImage(img, w, hh, fromAlpha) {
+  const c = h('canvas', { width: w, height: hh });
   const ctx = c.getContext('2d');
-  ctx.drawImage(img, 0, 0, input.w, input.h);
-  const d = ctx.getImageData(0, 0, input.w, input.h);
+  ctx.drawImage(img, 0, 0, w, hh);
+  const d = ctx.getImageData(0, 0, w, hh);
   const p = d.data, rgb = maskRgb();
   for (let i = 0; i < p.length; i += 4) {
     const lum = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
@@ -2372,10 +2564,73 @@ async function loadMaskFile(blob, { fromAlpha = false } = {}) {
     [p[i], p[i + 1], p[i + 2]] = rgb; p[i + 3] = m;
   }
   ctx.putImageData(d, 0, 0);
-  input.mask = maskHasContent(c) ? c : null;
-  renderMaskBox();
-  renderMode();
+  return c;
 }
+async function blobImage(blob) {
+  const url = URL.createObjectURL(blob);
+  try { return await loadImage(url); } finally { URL.revokeObjectURL(url); }
+}
+async function loadMaskFile(blob, { fromAlpha = false } = {}) {
+  if (!input.img) return toast('Load an input image before adding a mask.', 'error');
+  let img;
+  try { img = await blobImage(blob); } catch (e) { return toast(errText(e), 'error'); }
+  setMask(maskFromImage(img, input.w, input.h, fromAlpha));
+}
+
+/* ---------- Focused inpainting: the context window ---------- */
+// Boxes are {x, y, w, h} in input image pixels. The window is cropped out, inpainted at the generation size and
+// pasted back. By Size: the mask's bounds plus a border, widened to the generation aspect ratio. Manual Select: a box
+// the user places in the mask editor, always at the generation aspect ratio.
+const MIN_CTX = 16;
+function genSize() { return { w: clampInt(gen.width, 16, 16384, 1024), h: clampInt(gen.height, 16, 16384, 1024) }; }
+function genAspect() { const s = genSize(); return s.w / s.h; }
+
+// A w×h box centered on (cx, cy), shrunk to fit the image and moved inside it.
+function placeBox(cx, cy, w, hh) {
+  w = Math.min(w, input.w); hh = Math.min(hh, input.h);
+  return { x: Math.min(Math.max(0, cx - w / 2), input.w - w), y: Math.min(Math.max(0, cy - hh / 2), input.h - hh), w, h: hh };
+}
+// Same center and area at the generation aspect ratio, as large as fits.
+function conformBox(b) {
+  const ar = genAspect();
+  let w = Math.max(MIN_CTX, Math.sqrt(b.w * b.h * ar)), hh = w / ar;
+  const k = Math.min(1, input.w / w, input.h / hh);
+  w *= k; hh *= k;
+  return placeBox(b.x + b.w / 2, b.y + b.h / 2, w, hh);
+}
+// By Size: `bounds` plus the border (clipped to the image), widened to the aspect ratio as far as the image allows.
+function autoBox(bounds) {
+  const n = clampInt(gen.ctxBorder, 0, 16384, 32), ar = genAspect();
+  const x0 = Math.max(0, bounds.x - n), y0 = Math.max(0, bounds.y - n);
+  const x1 = Math.min(input.w, bounds.x + bounds.w + n), y1 = Math.min(input.h, bounds.y + bounds.h + n);
+  let w = x1 - x0, hh = y1 - y0;
+  if (w / hh < ar) w = hh * ar; else hh = w / ar;
+  return placeBox((x0 + x1) / 2, (y0 + y1) / 2, w, hh);
+}
+// Where Manual Select starts: the By Size window, or the generation size at the image center.
+function defaultManualBox(bounds) {
+  if (bounds) return conformBox(autoBox(bounds));
+  const s = genSize();
+  return conformBox({ x: (input.w - s.w) / 2, y: (input.h - s.h) / 2, w: s.w, h: s.h });
+}
+// The window for a mask with `bounds` (By Size) or the manual box `manual`, unrounded; null without a mask in By Size.
+function windowFor(bounds, manual) {
+  if (gen.ctxMode === 'manual') return conformBox(manual || defaultManualBox(bounds));
+  return bounds ? autoBox(bounds) : null;
+}
+function roundBox(b) {
+  if (!b) return null;
+  const x = Math.round(b.x), y = Math.round(b.y);
+  return { x, y, w: Math.max(1, Math.min(input.w - x, Math.round(b.w))), h: Math.max(1, Math.min(input.h - y, Math.round(b.h))) };
+}
+// The current context window in whole pixels (null without a mask in By Size). Manual Select keeps its box.
+function ctxBox() {
+  if (!input.img) return null;
+  if (gen.ctxMode === 'manual') input.ctxBox = windowFor(input.maskBounds, input.ctxBox);
+  return roundBox(windowFor(input.maskBounds, input.ctxBox));
+}
+const boxContains = (o, i) => i.x >= o.x && i.y >= o.y && i.x + i.w <= o.x + o.w && i.y + i.h <= o.y + o.h;
+const sameBox = (p, q) => !!p && !!q && p.x === q.x && p.y === q.y && p.w === q.w && p.h === q.h;
 async function downloadMask() {
   if (!input.mask) return toast('No mask to download.');
   const src = input.mask;
@@ -2411,9 +2666,9 @@ function matchPrompt(a) {
       let score = 0;
       // The CADS node is bypassed when CADS is off, so a missing one doesn't count against a match either.
       for (const [id, n] of Object.entries(tmpl)) if (id !== loraId && !(id === cadsId && !a[id])) score += a[id] && same(n, a[id]) ? 1 : -1;
-      // Nodes we add ourselves (LoRA clones, RepeatLatentBatch) don't count against a match.
+      // Nodes we add ourselves (LoRA clones, RepeatLatentBatch, scaling and paste-back) don't count against a match.
       for (const [id, n] of Object.entries(a)) {
-        if ((tmpl[id] && id !== loraId) || n.class_type === loraClass || n.class_type === 'RepeatLatentBatch') continue;
+        if ((tmpl[id] && id !== loraId) || n.class_type === loraClass || n.class_type === 'RepeatLatentBatch' || isAinvilNode(n)) continue;
         score--;
       }
       if (!best || score > best.score) best = { fw, mode, tmpl, loraId, loraClass, score };
@@ -2448,10 +2703,48 @@ function isExpansionOf(tmpl, v) {
   return new RegExp('^' + re + '$').test(String(v));
 }
 
-// Loads the input image (and mask) the prompt used from the server's input folder.
-async function loadPromptImage(ref, mode) {
+// A Focused inpainting prompt's context window ({x, y, w, h}) and the original it was pasted into, or null.
+// Without a scale-back node the window had the generation size (gw×gh).
+function promptFocus(a, gw, gh) {
+  const nodes = Object.values(a), byTitle = (t) => nodes.find((n) => n?._meta?.title === t);
+  const paste = byTitle(AINVIL_NODES.paste);
+  if (!paste) return null;
+  const back = a[paste.inputs.source?.[0]];
+  const sized = back?._meta?.title === AINVIL_NODES.scaleBack;
+  return {
+    x: Number(paste.inputs.x) || 0, y: Number(paste.inputs.y) || 0,
+    w: sized ? Number(back.inputs.width) : gw, h: sized ? Number(back.inputs.height) : gh,
+    original: byTitle(AINVIL_NODES.original)?.inputs?.image,
+  };
+}
+
+function splitRef(ref) {
   const slash = ref.lastIndexOf('/');
-  const subfolder = slash < 0 ? '' : ref.slice(0, slash), filename = ref.slice(slash + 1);
+  return { subfolder: slash < 0 ? '' : ref.slice(0, slash), filename: ref.slice(slash + 1) };
+}
+
+// Focused inpainting: the input image is the original, and the crop's mask goes back to the window's position.
+// The window stays By Size when that gives the same box; otherwise it becomes the Manual Select box.
+async function loadFocusedImage(ref, focus) {
+  if (typeof focus.original !== 'string') throw new Error('the prompt has no original image');
+  const { subfolder, filename } = splitRef(focus.original);
+  await setInputImage(await fetchBlob(api.viewUrl({ filename, subfolder, type: 'input' })), filename);
+  const crop = splitRef(ref);
+  const cropMask = maskFromImage(await blobImage(await fetchBlob(api.viewUrl({ ...crop, type: 'input' }))), focus.w, focus.h, true);
+  const full = h('canvas', { width: input.w, height: input.h });
+  full.getContext('2d').drawImage(cropMask, focus.x, focus.y);
+  setMask(full);
+  const box = { x: focus.x, y: focus.y, w: focus.w, h: focus.h };
+  gen.ctxMode = input.maskBounds && sameBox(roundBox(autoBox(input.maskBounds)), box) ? 'auto' : 'manual';
+  input.ctxBox = gen.ctxMode === 'manual' ? box : null;
+  saveGenSoon();
+  renderFocus();
+}
+
+// Loads the input image (and mask) the prompt used from the server's input folder.
+async function loadPromptImage(ref, mode, focus) {
+  if (focus) return loadFocusedImage(ref, focus);
+  const { subfolder, filename } = splitRef(ref);
   const fetchInput = (name) => fetchBlob(api.viewUrl({ filename: name, subfolder, type: 'input' }));
   const file = await fetchInput(filename);
   let image = file, imageName = filename, exact = true;
@@ -2466,7 +2759,7 @@ async function loadPromptImage(ref, mode) {
   }
   await setInputImage(image, imageName);
   if (mode === 'inpainting') await loadMaskFile(file, { fromAlpha: true });
-  else { input.mask = null; renderInput(); }
+  else setMask(null);
   if (!exact) toast('The original of the inpainting input is gone from the server, so the image under the mask may be black.');
 }
 
@@ -2508,9 +2801,11 @@ async function applyPromptSettings(a, from) {
     const rep = a[src[0]];
     gen.batchSize = rep?.class_type === 'RepeatLatentBatch' ? Number(rep.inputs.amount) || 1 : 1;
   }
+  const focus = mode === 'inpainting' ? promptFocus(a, gen.width, gen.height) : null;
+  if (mode === 'inpainting') gen.inpaintMode = focus ? 'focused' : 'whole';
   if (mode !== 'txt2img') {
     set('denoiseStep', 'denoise', (d) => Math.round((1 - Number(d)) * clampInt(gen.steps, 1, 10000)));
-    set('crop', 'crop', (v) => v === true || v === 'center');
+    if (!focus) set('crop', 'crop', (v) => v === true || v === 'center');
     set('noiseMask', 'noise_mask', Boolean);
   }
   if (match.loraClass) gen.loras = promptLoras(a, match);
@@ -2540,7 +2835,7 @@ async function applyPromptSettings(a, from) {
   const ref = promptValue(a, m, 'image');
   if (mode === 'txt2img') clearInputImage();
   else if (typeof ref === 'string' && ref) {
-    try { await loadPromptImage(ref, mode); }
+    try { await loadPromptImage(ref, mode, focus); }
     catch (e) { toast(`Could not load the input image "${ref}" from the server: ${errText(e)}`, 'error'); }
   }
   setStatus(`Loaded settings from ${from} (${fw.name}, ${mode}).`, 'ok');
@@ -2659,23 +2954,85 @@ async function historyToGallery(en) {
 }
 
 /* ---------- mask editor ---------- */
-const me = { work: null, ctx: null, erase: false, undo: [], drawing: false, last: null };
+// tool: paint, erase or window (moves/resizes the Manual Select context window, kept in `box` until Done).
+// bounds: the painted area of `work`, updated after each change, for the By Size window preview.
+const me = { work: null, ctx: null, tool: 'paint', undo: [], drawing: false, last: null, bounds: null, box: null, drag: null };
 function openMaskEditor() {
   if (!input.img) return;
   const c = h('canvas', { width: input.w, height: input.h });
   const ctx = c.getContext('2d');
   if (input.mask) ctx.drawImage(input.mask, 0, 0);
-  me.work = c; me.ctx = ctx; me.undo = []; me.drawing = false;
+  me.work = c; me.ctx = ctx; me.undo = []; me.drawing = false; me.drag = null;
+  me.bounds = input.maskBounds;
+  me.box = gen.ctxMode === 'manual' ? windowFor(input.maskBounds, input.ctxBox) : null;
   $('#meImg').src = input.url;
   $('#meWrap').querySelector('canvas')?.remove();
-  $('#meWrap').append(c);
+  $('#meImg').after(c);
   c.addEventListener('pointerdown', mePointerDown);
   c.addEventListener('pointermove', mePointerMove);
   c.addEventListener('pointerup', mePointerUp);
   c.addEventListener('pointercancel', mePointerUp);
   c.addEventListener('pointerleave', () => { $('#meRing').hidden = true; });
+  c.addEventListener('wheel', meWheel, { passive: false });
+  $('#meWindow').hidden = !meManual();
+  if (me.tool === 'window' && !meManual()) meSetTool('paint');
   $('#maskEditor').hidden = false;
   fitMaskEditor();
+  meRenderBox();
+}
+function meManual() { return gen.inpaintMode === 'focused' && gen.ctxMode === 'manual'; }
+// Shows the context window over the image: always in Manual Select, with a mask in By Size.
+function meRenderBox() {
+  const el = $('#meCtx'), info = $('#meCtxInfo');
+  const b = gen.inpaintMode === 'focused' && roundBox(windowFor(me.bounds, me.box));
+  el.hidden = !b;
+  info.textContent = '';
+  if (!b) return;
+  const pct = (v, of) => (v / of) * 100 + '%';
+  Object.assign(el.style, { left: pct(b.x, input.w), top: pct(b.y, input.h), width: pct(b.w, input.w), height: pct(b.h, input.h) });
+  el.classList.toggle('edit', me.tool === 'window');
+  const s = genSize();
+  info.textContent = `Context window ${b.w}×${b.h} → ${s.w}×${s.h}${meManual() ? '' : ' (By Size)'}`;
+}
+function meMaskChanged() {
+  me.bounds = maskBounds(me.work);
+  meRenderBox();
+}
+// Window tool: a corner resizes from the opposite corner, inside moves, outside draws a new window from that point.
+// The handle hit area is in screen pixels (k = image pixels per screen pixel).
+function meBoxHit(p) {
+  const b = me.box, r = 12 * p.k;
+  const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
+  const ci = corners.findIndex(([x, y]) => Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r);
+  if (ci >= 0) return { kind: 'resize', corner: ci, ax: corners[3 - ci][0], ay: corners[3 - ci][1] };
+  if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return { kind: 'move', dx: p.x - b.x, dy: p.y - b.y };
+  return { kind: 'resize', ax: Math.min(Math.max(0, p.x), input.w), ay: Math.min(Math.max(0, p.y), input.h) };
+}
+function meBoxDrag(p) {
+  const d = me.drag, b = me.box;
+  if (d.kind === 'move') {
+    me.box = { ...b, x: Math.min(Math.max(0, p.x - d.dx), input.w - b.w), y: Math.min(Math.max(0, p.y - d.dy), input.h - b.h) };
+  } else {
+    const ar = genAspect(), sx = p.x >= d.ax ? 1 : -1, sy = p.y >= d.ay ? 1 : -1;
+    let w = Math.max(Math.abs(p.x - d.ax), Math.abs(p.y - d.ay) * ar, MIN_CTX);
+    w = Math.max(1, Math.min(w, sx > 0 ? input.w - d.ax : d.ax, (sy > 0 ? input.h - d.ay : d.ay) * ar));
+    const hh = w / ar;
+    me.box = { x: sx > 0 ? d.ax : d.ax - w, y: sy > 0 ? d.ay : d.ay - hh, w, h: hh };
+  }
+  meRenderBox();
+}
+function meWheel(e) {
+  if (me.tool !== 'window' || !me.box) return;
+  e.preventDefault();
+  const b = me.box, k = e.deltaY < 0 ? 1 / 1.1 : 1.1;
+  me.box = conformBox({ x: b.x + b.w / 2 - (b.w * k) / 2, y: b.y + b.h / 2 - (b.h * k) / 2, w: b.w * k, h: b.h * k });
+  meRenderBox();
+}
+function meBoxCursor(p) {
+  const hit = meBoxHit(p);
+  if (hit.kind === 'move') return 'move';
+  if (hit.corner == null) return 'crosshair';
+  return hit.corner === 0 || hit.corner === 3 ? 'nwse-resize' : 'nesw-resize';
 }
 function fitMaskEditor() {
   if ($('#maskEditor').hidden) return;
@@ -2690,7 +3047,7 @@ function mePos(e) {
 }
 function meStroke(a, b) {
   const ctx = me.ctx;
-  ctx.globalCompositeOperation = me.erase ? 'destination-out' : 'source-over';
+  ctx.globalCompositeOperation = me.tool === 'erase' ? 'destination-out' : 'source-over';
   ctx.strokeStyle = ctx.fillStyle = `rgb(${maskRgb().join(',')})`;
   ctx.lineCap = ctx.lineJoin = 'round';
   ctx.lineWidth = Number($('#meSize').value) * b.k;
@@ -2706,6 +3063,10 @@ function mePushUndo() {
 function mePointerDown(e) {
   e.preventDefault();
   try { me.work.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
+  if (me.tool === 'window') {
+    me.drag = meBoxHit(mePos(e));
+    return;
+  }
   mePushUndo();
   me.drawing = true;
   me.last = mePos(e);
@@ -2713,6 +3074,13 @@ function mePointerDown(e) {
 }
 function mePointerMove(e) {
   const ring = $('#meRing');
+  if (me.tool === 'window') {
+    ring.hidden = true;
+    const p = mePos(e);
+    if (me.drag) meBoxDrag(p);
+    else me.work.style.cursor = meBoxCursor(p);
+    return;
+  }
   const sz = Number($('#meSize').value);
   ring.hidden = e.pointerType === 'touch';
   Object.assign(ring.style, { left: e.clientX + 'px', top: e.clientY + 'px', width: sz + 'px', height: sz + 'px' });
@@ -2721,11 +3089,17 @@ function mePointerMove(e) {
   meStroke(me.last, p);
   me.last = p;
 }
-function mePointerUp() { me.drawing = false; }
-function meSetErase(erase) {
-  me.erase = erase;
-  $('#mePaint').classList.toggle('on', !erase);
-  $('#meErase').classList.toggle('on', erase);
+function mePointerUp() {
+  me.drag = null;
+  if (!me.drawing) return;
+  me.drawing = false;
+  meMaskChanged();
+}
+function meSetTool(tool) {
+  me.tool = tool;
+  for (const [id, t] of [['#mePaint', 'paint'], ['#meErase', 'erase'], ['#meWindow', 'window']]) $(id).classList.toggle('on', tool === t);
+  if (me.work) me.work.style.cursor = '';
+  meRenderBox();
 }
 function meInvert() {
   mePushUndo();
@@ -2735,28 +3109,30 @@ function meInvert() {
     d.data[i + 3] = 255 - d.data[i + 3];
   }
   me.ctx.putImageData(d, 0, 0);
+  meMaskChanged();
 }
 function meFill(clear) {
   mePushUndo();
   me.ctx.globalCompositeOperation = 'source-over';
   me.ctx.clearRect(0, 0, me.work.width, me.work.height);
   if (!clear) { me.ctx.fillStyle = `rgb(${maskRgb().join(',')})`; me.ctx.fillRect(0, 0, me.work.width, me.work.height); }
+  meMaskChanged();
 }
 function meUndo() {
   const d = me.undo.pop();
   if (!d) return;
   me.ctx.putImageData(d, 0, 0);
   recolorMask(me.work);  // the snapshot may predate a color change
+  meMaskChanged();
 }
 function closeMaskEditor(apply) {
   if (apply) {
-    input.mask = maskHasContent(me.work) ? me.work : null;
-    renderMaskBox();
-    renderMode();
+    if (me.box) input.ctxBox = me.box;
+    setMask(me.work);
   }
   $('#maskEditor').hidden = true;
   $('#meRing').hidden = true;
-  me.work = null; me.ctx = null; me.undo = [];
+  me.work = null; me.ctx = null; me.undo = []; me.box = null; me.drag = null;
 }
 
 /* ======================================================================
@@ -3292,9 +3668,23 @@ function renderConfig() {
   $('#cfgSaveImage').checked = config.serverPreferences.saveImage;
   $('#cfgGalleryCols').value = config.clientPreferences.galleryColumns;
   $('#cfgGalleryRows').value = config.clientPreferences.galleryRows;
+  renderScalePrefs();
   setMaskColor(config.clientPreferences.maskColor, { save: false });
   applyClientPrefs();
   renderConfigLists();
+}
+
+// Resize methods come from ImageScale, upscale models from UpscaleModelLoader; '' is no upscale model.
+function renderScalePrefs() {
+  const sp = config.serverPreferences;
+  fillSelect($('#cfgScaleMethod'), comboOptions(specFor('ImageScale', 'upscale_method')), sp.scaleMethod);
+  const models = comboOptions(specFor('UpscaleModelLoader', 'model_name'));
+  const opts = [...(models || [])];
+  if (sp.upscaleModel && !opts.includes(sp.upscaleModel)) opts.unshift(sp.upscaleModel);
+  const sel = $('#cfgUpscaleModel');
+  sel.replaceChildren(h('option', { value: '' }, 'None (resize method only)'),
+    ...opts.map((o) => h('option', { value: o, title: o }, o + (models && !models.includes(o) ? ' (not on server)' : ''))));
+  sel.value = sp.upscaleModel;
 }
 
 function applyClientPrefs() {
@@ -3452,8 +3842,8 @@ function bindGenerate() {
   $('#negative').addEventListener('input', (e) => { gen.negative = e.target.value; saveGenSoon(); });
   num('batchCount', 'batchCount');
   $('#batchCount').addEventListener('change', (e) => { gen.batchCount = clampInt(e.target.value, 1, 128, 1); e.target.value = gen.batchCount; saveGenSoon(); });
-  num('width', 'width', () => { gen.resCustom = false; renderRes(); });
-  num('height', 'height', () => { gen.resCustom = false; renderRes(); });
+  num('width', 'width', () => { gen.resCustom = false; renderRes(); renderFocus(); });
+  num('height', 'height', () => { gen.resCustom = false; renderRes(); renderFocus(); });
   num('seed', 'seed');
   $('#randomSeed').addEventListener('change', (e) => { gen.randomSeed = e.target.checked; saveGenSoon(); });
   num('batchSize', 'batchSize');
@@ -3503,6 +3893,16 @@ function bindGenerate() {
   $('#cadsSeedAuto').addEventListener('change', (e) => { gen.cads.seedAuto = e.target.checked; saveGenSoon(); });
   $('#crop').addEventListener('change', (e) => { gen.crop = e.target.checked; saveGenSoon(); });
   $('#noiseMask').addEventListener('change', (e) => { gen.noiseMask = e.target.checked; saveGenSoon(); });
+  $$('#inpaintArea button').forEach((b) => b.addEventListener('click', () => { gen.inpaintMode = b.dataset.area; renderFocus(); saveGenSoon(); }));
+  $$('#ctxModes button').forEach((b) => b.addEventListener('click', () => {
+    // Manual Select starts from the window By Size shows.
+    if (b.dataset.ctx === 'manual' && gen.ctxMode !== 'manual' && input.img) input.ctxBox = defaultManualBox(input.maskBounds);
+    gen.ctxMode = b.dataset.ctx;
+    renderFocus();
+    saveGenSoon();
+  }));
+  $('#ctxBorder').addEventListener('input', (e) => { if (e.target.value !== '') { gen.ctxBorder = clampInt(e.target.value, 0, 16384, 32); renderFocus(); saveGenSoon(); } });
+  $('#ctxBorder').addEventListener('change', (e) => { e.target.value = gen.ctxBorder; });
 
   $('#btnGenerate').addEventListener('click', runGenerate);
   $('#btnCancel').addEventListener('click', cancelGenerate);
@@ -3578,7 +3978,7 @@ function bindGenerate() {
   $('#btnUpMask').addEventListener('click', () => { if (!input.img) return toast('Load an input image first.'); $('#fileMask').click(); });
   $('#fileMask').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadMaskFile(f); e.target.value = ''; });
   $('#btnDlMask').addEventListener('click', downloadMask);
-  $('#btnClearMask').addEventListener('click', () => { input.mask = null; renderMaskBox(); renderMode(); });
+  $('#btnClearMask').addEventListener('click', () => setMask(null));
   document.addEventListener('paste', (e) => {
     if (!$('#tab-generate').classList.contains('active')) return;
     if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) return;
@@ -3587,8 +3987,9 @@ function bindGenerate() {
   });
 
   // mask editor
-  $('#mePaint').addEventListener('click', () => meSetErase(false));
-  $('#meErase').addEventListener('click', () => meSetErase(true));
+  $('#mePaint').addEventListener('click', () => meSetTool('paint'));
+  $('#meErase').addEventListener('click', () => meSetTool('erase'));
+  $('#meWindow').addEventListener('click', () => meSetTool('window'));
   $('#meUndo').addEventListener('click', meUndo);
   $('#meInvert').addEventListener('click', meInvert);
   $('#meFill').addEventListener('click', () => meFill(false));
@@ -3602,7 +4003,8 @@ function bindGenerate() {
     if (!$('#maskEditor').hidden) {
       if (e.key === 'Escape') closeMaskEditor(false);
       else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); meUndo(); }
-      else if (e.key === 'x') meSetErase(!me.erase);
+      else if (e.key === 'x') meSetTool(me.tool === 'erase' ? 'paint' : 'erase');
+      else if (e.key === 'w' && meManual()) meSetTool(me.tool === 'window' ? 'paint' : 'window');
       else if (e.key === '[' || e.key === ']') { const s = $('#meSize'); s.value = Number(s.value) + (e.key === ']' ? 5 : -5); }
       return;
     }
@@ -3682,6 +4084,8 @@ function bindConfig() {
   $('#cfgLivePreview').addEventListener('change', (e) => { config.serverFeatures.livePreview = e.target.checked; configChanged({ generate: false }); });
   $('#cfgShowLivePreview').addEventListener('change', (e) => { config.clientPreferences.showLivePreview = e.target.checked; saveConfig(); });
   $('#cfgSaveImage').addEventListener('change', (e) => { config.serverPreferences.saveImage = e.target.checked; configChanged({ generate: false }); });
+  $('#cfgScaleMethod').addEventListener('change', (e) => { config.serverPreferences.scaleMethod = e.target.value; saveConfig(); });
+  $('#cfgUpscaleModel').addEventListener('change', (e) => { config.serverPreferences.upscaleModel = e.target.value; saveConfig(); });
   for (const [id, key] of [['#cfgGalleryCols', 'galleryColumns'], ['#cfgGalleryRows', 'galleryRows']]) {
     $(id).addEventListener('change', (e) => { config.clientPreferences[key] = Number(e.target.value); saveConfig(); applyClientPrefs(); });
   }
