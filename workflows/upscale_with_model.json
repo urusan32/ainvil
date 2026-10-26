@@ -1,8 +1,8 @@
 {
   "id": "a148992a-7d0f-4888-b676-e1abe2c66c2a",
   "revision": 0,
-  "last_node_id": 11,
-  "last_link_id": 12,
+  "last_node_id": 12,
+  "last_link_id": 14,
   "nodes": [
     {
       "id": 2,
@@ -57,13 +57,13 @@
         490.98958333333337
       ],
       "flags": {},
-      "order": 5,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 11
+          "link": 14
         }
       ],
       "outputs": [
@@ -172,7 +172,8 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            12
+            12,
+            13
           ]
         }
       ],
@@ -225,6 +226,62 @@
         "height": 1536,
         "crop": "disabled"
       }
+    },
+    {
+      "id": 12,
+      "type": "ComfySwitchNode",
+      "pos": [
+        1692.18680061792,
+        2594.597265955979
+      ],
+      "size": [
+        270,
+        110
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "title": "Model upscale only",
+      "inputs": [
+        {
+          "name": "on_false",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 11
+        },
+        {
+          "name": "on_true",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 13
+        },
+        {
+          "name": "switch",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "switch"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "IMAGE",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ComfySwitchNode"
+      },
+      "widgets_values": [
+        false
+      ],
+      "widgets_values_named": {
+        "switch": false
+      }
     }
   ],
   "links": [
@@ -248,7 +305,7 @@
       11,
       11,
       0,
-      5,
+      12,
       0,
       "IMAGE"
     ],
@@ -257,6 +314,22 @@
       10,
       0,
       11,
+      0,
+      "IMAGE"
+    ],
+    [
+      13,
+      10,
+      0,
+      12,
+      1,
+      "IMAGE"
+    ],
+    [
+      14,
+      12,
+      0,
+      5,
       0,
       "IMAGE"
     ]

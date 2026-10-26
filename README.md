@@ -22,7 +22,7 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - **Clear** resets the page.
   - **Generate Workflow** downloads the ComfyUI API-format workflow for the first image instead of running it.
   - Drop a PNG made by Ainvil (or ComfyUI with the same workflow) onto the Main section to use it as a template. This loads its prompts, model, generation parameters, LoRAs and custom parameters. For img2img and inpainting it also loads the input image and mask, if they are still in the server's `input/` folder. The seed is loaded with Random turned off. A `%date:…%` filename prefix is kept as the template, not replaced by its expanded value.
-- **Generation Parameters**: resolution presets (1024 / 1536 × Square / Landscape / Portrait, or Custom), seed (with a Random toggle), batch size, steps, CFG, sampler and scheduler.
+- **Generation Parameters**: resolution presets (1024 / 1536 × Square / Landscape / Portrait / Widescreen Landscape / Widescreen Portrait, or Custom; the widescreen sizes are about 16:9, in multiples of 64), seed (with a Random toggle), batch size, steps, CFG, sampler and scheduler.
 - **Input Image**: drop, choose or paste an image to switch to **img2img**.
   - Click the mask box to paint a mask, which switches to **inpainting**.
   - In the mask editor: `[` and `]` change the brush size, `x` toggles erase, Ctrl+Z undoes.
@@ -36,13 +36,13 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - Click the large image for a full-screen view: arrow keys browse and Esc closes. Save with the viewer's **Download** button or by right-clicking.
   - When the page is served over http(s), right-click › *Save Image As* uses the image's real filename. Opened from disk (`file://`), Firefox can only show the image as a nameless blob, so use **Download** or right-click › *Save Link As* to get the real filename.
   - **Download All** downloads the whole run as a ZIP file.
-  - **Use Seed** copies the selected image's seed into the Seed field. **Use as Input** loads the image as the input image for img2img.
+  - **Use Seed** copies the selected image's seed into the Seed field. **Use as Input** loads the image as the input image for img2img. **Send to Extras** adds it to the current Extras workflow's images and switches to Extras.
 - **LoRA**: add any number of LoRAs from the server, filtered to the workflow's model family, with a weight for each.
   - The search box narrows every LoRA list to names containing the words you type, and **+ Add LoRA** adds the first match.
   - The **On/Off** button keeps a LoRA in the list without using it.
 - **Custom Parameters**: extra settings defined by the selected workflow. Anima and MOSS have *Resize method* and *Filename prefix*; MOSS also has the Skip Layer Guidance settings (*Skip layer guidance* on/off, off by default, plus its layers and start/end percent).
 - **CADS** (Condition-Annealed Diffusion Sampler): adds scheduled noise to the conditioning for more varied images. It needs the [comfyui-cads](https://github.com/asagi4/ComfyUI-CADS) extension on the server and a workflow with a CADS node (the built-in Anima and MOSS workflows have one).
-  - **Enable CADS** turns it on or off. When it's off, unsupported by the server (*Server Features › CADS*), or not configured for the workflow, the CADS node is bypassed and the section says why.
+  - **Enable CADS** turns it on or off (off by default). When it's off, unsupported by the server (*Server Features › CADS*), or not configured for the workflow, the CADS node is bypassed and the section says why.
   - The settings start at the workflow's CADS node values. **Total steps** follows the main Steps whenever Steps changes, but changing it doesn't change Steps. The CADS seed follows the image seed.
 
 The page remembers your Generate settings (not images) between visits.
@@ -53,13 +53,14 @@ Runs a *custom workflow*: any ComfyUI workflow with parameters you define in *Co
 
 - **Image** parameters take one or more images: drop them, choose them, or paste one. With several images the workflow runs once per image (a batch conversion), each as its own queue entry. Remove an image with its ✕.
 - Combo parameters list the options from the server. Lists of files, such as models, also get a **Search** box.
-- **Output** shows the results like the Output Gallery, with the input image name and output size. Click for the full-screen viewer, or use **Download Selected** / **Download All** (ZIP).
+- **Output** shows the results like the Output Gallery, with the input image name and output size. Click for the full-screen viewer, or use **Download Selected** / **Download All** (ZIP). **Use as Input** loads the selected result as the Generate tab's input image.
 
 The built-in **Upscale with model** workflow upscales with an upscale model, then resizes to a target size:
 
 - **Upscale model**: the model's fixed factor (2x, 4x, …; the model name usually says which) is applied first.
+- **Model upscale only**: skip the final resize and keep the model's output size (e.g. 4× the input). Width, Height, Final resize method and Crop are then ignored.
 - **Width** / **Height**: the final size. Set one of them to 0 to keep the image's aspect ratio, which is what you want for a batch of differently shaped images.
-- **Resize method** and **Crop** (`center` crops to the target aspect ratio instead of stretching).
+- **Final resize method** and **Crop** (`center` crops to the target aspect ratio instead of stretching).
 - **Filename prefix**: `%input%` is replaced by the input image name, so batch outputs keep their names.
 
 The Extras settings are remembered between visits, the images are not.
