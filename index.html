@@ -168,6 +168,12 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 .mask-wrap canvas { opacity: .55; touch-action: none; cursor: none; }
 #ieWrap { background: repeating-conic-gradient(#999 0 25%, #ccc 0 50%) 0 0 / 16px 16px; }
 #ieWrap canvas { opacity: 1; }
+#ieWrap { flex: none; }
+#ieWrap.px canvas { image-rendering: pixelated; }
+#ieStage.pan, #ieStage.pan canvas { cursor: grab; }
+#ieStage.panning, #ieStage.panning canvas { cursor: grabbing; }
+.swatches { display: inline-flex; gap: 4px; }
+.swatches button { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 4px; }
 /* Focused inpainting's context window: the outside is dimmed; the corner handles show with the Window tool. */
 .ctx-box { position: absolute; z-index: 1; pointer-events: none; outline: 2px dashed #fff; box-shadow: 0 0 0 1px #000, 0 0 0 9999px rgba(0,0,0,.35); }
 .ctx-box i { position: absolute; width: 12px; height: 12px; background: #fff; border: 1px solid #000; transform: translate(-50%, -50%); display: none; }
@@ -610,13 +616,17 @@ table.map td:first-child .hint { display: block; }
 <!-- Image editor -->
 <div id="imageEditor" class="overlay" hidden>
   <div class="mask-toolbar">
-    <div class="seg"><button id="iePaint" class="on" title="Paint (B; Alt+click picks a color)">Paint</button><button id="ieErase" title="Paint the original image back (X toggles Paint/Erase)">Erase</button><button id="ieFillTool" title="Flood fill with the paint color (F; Alt+click picks a color)">Fill</button><button id="ieSelect" title="Rectangular selection (S): drag outside to draw one, drag inside to move it, drag a corner to resize it, click outside to deselect (Ctrl+D). Paint, Erase and Fill stay inside it.">Select</button></div>
+    <div class="seg"><button id="iePaint" class="on" title="Paint (B; Alt+click picks a color)">Paint</button><button id="ieErase" title="Paint the original image back (X toggles Paint/Erase)">Erase</button><button id="ieFillTool" title="Flood fill with the paint color (F; Alt+click picks a color)">Fill</button><button id="ieSelect" title="Rectangular selection (S): drag outside to draw one, drag inside to move it, drag a corner to resize it, click outside to deselect (Ctrl+D). Paint, Erase and Fill stay inside it.">Select</button><button id="iePick" title="Eyedropper (I): click or drag to pick the paint color from the image">Pick</button><button id="iePan" title="Pan (H; or hold Space, or drag with the middle button): drag to move the zoomed image">Pan</button></div>
+    <button id="ieDeselect" title="Clear the selection (Ctrl+D)" hidden>Deselect</button>
     <button id="ieCrop" title="Crop the edited image (and the mask) to the selection, use it as the input image and add it to the Image Stash" hidden>Crop</button>
     <label>Brush <input type="range" id="ieSize" min="1" max="300" value="20"></label>
     <label title="Paint color (Alt+click on the image picks one)">Color <input type="color" id="ieColor" value="#ffffff"></label>
+    <span id="ieRecent" class="swatches" title="Recently used colors"></span>
     <label id="ieTolLabel" title="How different a pixel may be from the clicked one (in each channel) and still be filled" hidden>Tolerance <input type="range" id="ieTol" min="0" max="255" value="32"></label>
     <button id="ieUndo" title="Undo (Ctrl+Z)">Undo</button>
-    <button id="ieClear" title="Discard all edits">Clear</button>
+    <button id="ieClear" title="Discard all edits and the selection">Clear</button>
+    <button id="ieZoomReset" title="Zoom with the mouse wheel or +/−; this fits the image again (0)">Reset Zoom</button>
+    <span id="ieZoomInfo" class="hint"></span>
     <span id="ieInfo" class="hint"></span>
     <span class="spacer"></span>
     <button id="ieCancel" title="Discard all edits (Esc)">Cancel</button>
@@ -648,6 +658,7 @@ const DEFAULT_API = 'http://localhost:8188/';
 const MODES = ['txt2img', 'img2img', 'inpainting'];
 const UPLOAD_SUBFOLDER = 'ainvil';
 const DEFAULT_MASK_COLOR = '#ff285a';
+const RECENT_COLORS = 6;  // the image editor's recent paint colors
 
 // Functional parameters: things on the Generate tab that a functional workflow maps onto its ComfyUI workflows.
 const FPARAMS = [
@@ -1044,6 +1055,7 @@ function normalizeClientPrefs(p) {
     galleryRows: [1, 2].includes(rows) ? rows : 2,
     maskColor: /^#[0-9a-f]{6}$/i.test(p?.maskColor || '') ? p.maskColor.toLowerCase() : DEFAULT_MASK_COLOR,
     showLivePreview: p?.showLivePreview !== false,
+    recentColors: (Array.isArray(p?.recentColors) ? p.recentColors : []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).map((c) => c.toLowerCase()).slice(0, RECENT_COLORS),
   };
 }
 
@@ -3239,10 +3251,12 @@ function boxCursor(b, p) {
   return hit.corner === 0 || hit.corner === 3 ? 'nwse-resize' : 'nesw-resize';
 }
 // Shared by the mask and image editors: fits the image into the stage, and maps a pointer event to image pixels.
-function fitStage(stage, wrap) {
-  const s = Math.min((stage.clientWidth - 20) / input.w, (stage.clientHeight - 20) / input.h);
+// `zoom` multiplies the fitted size; returns the screen pixels per image pixel.
+function fitStage(stage, wrap, zoom = 1) {
+  const s = Math.min((stage.clientWidth - 20) / input.w, (stage.clientHeight - 20) / input.h) * zoom;
   wrap.style.width = Math.floor(input.w * s) + 'px';
   wrap.style.height = Math.floor(input.h * s) + 'px';
+  return s;
 }
 function canvasPos(c, e) {
   const r = c.getBoundingClientRect();
@@ -3368,15 +3382,18 @@ function closeMaskEditor(apply) {
 /* ---------- image editor ---------- */
 // Edits a copy of the input image (`work`); Done makes it the input image and stashes it, Cancel drops it.
 // tool: paint, erase (paints the original back), fill (flood fill) or select (rectangular selection `sel`,
-// whole pixels once a drag ends). Paint, erase and fill stay inside the selection.
-const ie = { work: null, ctx: null, tool: 'paint', undo: [], drawing: false, last: null, sel: null, drag: null };
+// whole pixels once a drag ends), pick (eyedropper) or pan. Paint, erase and fill stay inside the selection.
+// View: `zoom` multiplies the fitted size and `panX`/`panY` move the image from the center (screen pixels);
+// `pan` is an active pan drag and `space` is Space held down (pans with any tool).
+const ie = { work: null, ctx: null, tool: 'paint', undo: [], drawing: false, last: null, sel: null, drag: null, zoom: 1, panX: 0, panY: 0, pan: null, space: false };
 const IE_UNDO_BYTES = 256e6;  // full-image snapshots add up fast at large sizes
+const IE_MAX_SCALE = 32;  // screen pixels per image pixel at the deepest zoom
 function openImageEditor() {
   if (!input.img) return;
   const c = h('canvas', { width: input.w, height: input.h });
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(input.img, 0, 0);
-  Object.assign(ie, { work: c, ctx, undo: [], drawing: false, sel: null, drag: null });
+  Object.assign(ie, { work: c, ctx, undo: [], drawing: false, sel: null, drag: null, zoom: 1, panX: 0, panY: 0, pan: null });
   $('#ieWrap').querySelector('canvas')?.remove();
   $('#ieWrap').prepend(c);
   c.addEventListener('pointerdown', iePointerDown);
@@ -3387,14 +3404,91 @@ function openImageEditor() {
   $('#imageEditor').hidden = false;
   fitImageEditor();
   ieSetTool(ie.tool);
+  ieRenderRecent();
 }
 function fitImageEditor() {
-  if (!$('#imageEditor').hidden) fitStage($('#ieStage'), $('#ieWrap'));
+  if ($('#imageEditor').hidden) return;
+  const stage = $('#ieStage'), wrap = $('#ieWrap');
+  const s = fitStage(stage, wrap, ie.zoom);
+  // Keep at least 40 px of the image on screen; at the fitted size it stays centered.
+  const mx = ie.zoom === 1 ? 0 : (wrap.offsetWidth + stage.clientWidth) / 2 - 40;
+  const my = ie.zoom === 1 ? 0 : (wrap.offsetHeight + stage.clientHeight) / 2 - 40;
+  ie.panX = Math.min(Math.max(-mx, ie.panX), mx);
+  ie.panY = Math.min(Math.max(-my, ie.panY), my);
+  wrap.style.transform = `translate(${ie.panX}px, ${ie.panY}px)`;
+  wrap.classList.toggle('px', s >= 2);
+  $('#ieZoomInfo').textContent = `${Math.round(s * 100)}%`;
+  $('#ieZoomReset').disabled = ie.zoom === 1;
+}
+// Zooms by factor `f` around the client point (cx, cy), the stage center by default.
+function ieZoom(f, cx, cy) {
+  const stage = $('#ieStage'), r = stage.getBoundingClientRect(), w = $('#ieWrap').getBoundingClientRect();
+  const fit = Math.min((stage.clientWidth - 20) / input.w, (stage.clientHeight - 20) / input.h);
+  const z = Math.min(Math.max(1, ie.zoom * f), Math.max(1, IE_MAX_SCALE / fit));
+  if (cx == null) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+  // Keep the image point under (cx, cy) where it is.
+  const k = z / ie.zoom;
+  ie.panX += (cx - (w.left + w.width / 2)) * (1 - k);
+  ie.panY += (cy - (w.top + w.height / 2)) * (1 - k);
+  ie.zoom = z;
+  fitImageEditor();
+}
+function ieZoomReset() {
+  Object.assign(ie, { zoom: 1, panX: 0, panY: 0 });
+  fitImageEditor();
+}
+function ieWheel(e) {
+  e.preventDefault();
+  const dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+  ieZoom(2 ** (-dy / 300), e.clientX, e.clientY);
+}
+// Pans with the Pan tool, with Space held, or with the middle button. The stage takes the pointer before
+// the canvas does (capture phase), so panning can start outside the image too.
+function iePanning() {
+  return ie.tool === 'pan' || ie.space;
+}
+function ieStagePointerDown(e) {
+  if (!iePanning() && e.button !== 1) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const st = $('#ieStage');
+  try { st.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
+  ie.pan = { x: e.clientX - ie.panX, y: e.clientY - ie.panY };
+  st.classList.add('panning');
+  $('#ieRing').hidden = true;
+}
+function ieStagePointerMove(e) {
+  if (!ie.pan) return;
+  ie.panX = e.clientX - ie.pan.x;
+  ie.panY = e.clientY - ie.pan.y;
+  fitImageEditor();
+}
+function ieStagePointerUp() {
+  ie.pan = null;
+  $('#ieStage').classList.remove('panning');
+}
+function ieSetSpace(on) {
+  if (ie.space === on) return;
+  ie.space = on;
+  ieSetTool(ie.tool);
+}
+function ieRenderRecent() {
+  $('#ieRecent').replaceChildren(...config.clientPreferences.recentColors.map((c) =>
+    h('button', { title: c, style: `background:${c}`, onclick: () => { $('#ieColor').value = c; } })));
+}
+// Moves the paint color to the front of the recent colors once it is used.
+function ieUseColor() {
+  const c = $('#ieColor').value.toLowerCase(), list = config.clientPreferences.recentColors;
+  if (list[0] === c) return;
+  config.clientPreferences.recentColors = [c, ...list.filter((x) => x !== c)].slice(0, RECENT_COLORS);
+  saveConfig();
+  ieRenderRecent();
 }
 function ieRenderSel() {
   const el = $('#ieSel'), b = ie.sel;
   el.hidden = !b;
   $('#ieCrop').hidden = !b;
+  $('#ieDeselect').hidden = !b;
   $('#ieInfo').textContent = b ? `Selection ${Math.round(b.w)}×${Math.round(b.h)}` : '';
   if (!b) return;
   const pct = (v, of) => (v / of) * 100 + '%';
@@ -3403,9 +3497,10 @@ function ieRenderSel() {
 }
 function ieSetTool(tool) {
   ie.tool = tool;
-  for (const [id, t] of [['#iePaint', 'paint'], ['#ieErase', 'erase'], ['#ieFillTool', 'fill'], ['#ieSelect', 'select']]) $(id).classList.toggle('on', tool === t);
+  for (const [id, t] of [['#iePaint', 'paint'], ['#ieErase', 'erase'], ['#ieFillTool', 'fill'], ['#ieSelect', 'select'], ['#iePick', 'pick'], ['#iePan', 'pan']]) $(id).classList.toggle('on', tool === t);
   $('#ieTolLabel').hidden = tool !== 'fill';
-  if (ie.work) ie.work.style.cursor = tool === 'fill' ? 'crosshair' : '';
+  $('#ieStage').classList.toggle('pan', iePanning());
+  if (ie.work) ie.work.style.cursor = !iePanning() && (tool === 'fill' || tool === 'pick') ? 'crosshair' : '';
   ieRenderSel();
 }
 function ieSelectNone() {
@@ -3422,6 +3517,7 @@ function ieUndo() {
   if (d) ie.ctx.putImageData(d, 0, 0);
 }
 function ieClear() {
+  ieSelectNone();
   if (!ie.undo.length) return;
   iePushUndo();
   ie.ctx.globalCompositeOperation = 'copy';
@@ -3455,6 +3551,7 @@ function ieFloodFill(p) {
   const r = ie.sel || { x: 0, y: 0, w: input.w, h: input.h };
   const sx = Math.floor(p.x) - r.x, sy = Math.floor(p.y) - r.y, W = r.w, H = r.h;
   if (sx < 0 || sy < 0 || sx >= W || sy >= H) return;
+  ieUseColor();
   iePushUndo();
   const d = ie.ctx.getImageData(r.x, r.y, W, H), px = d.data;
   const si = (sy * W + sx) * 4, t = [px[si], px[si + 1], px[si + 2], px[si + 3]];
@@ -3482,7 +3579,7 @@ function ieFloodFill(p) {
   }
   ie.ctx.putImageData(d, r.x, r.y);
 }
-// Alt+click picks the color under the pointer.
+// The Pick tool (or Alt+click) picks the color under the pointer.
 function iePickColor(p) {
   const x = Math.min(input.w - 1, Math.max(0, Math.floor(p.x))), y = Math.min(input.h - 1, Math.max(0, Math.floor(p.y)));
   const d = ie.ctx.getImageData(x, y, 1, 1).data;
@@ -3507,8 +3604,10 @@ function iePointerDown(e) {
     if (ie.drag.kind === 'resize') ieSelDrag(p);
     return;
   }
-  if (e.altKey) return iePickColor(p);
+  if (ie.tool === 'pick') ie.drawing = true;  // keeps picking while dragging
+  if (e.altKey || ie.tool === 'pick') return iePickColor(p);
   if (ie.tool === 'fill') return ieFloodFill(p);
+  if (ie.tool === 'paint') ieUseColor();
   iePushUndo();
   ie.drawing = true;
   ie.last = p;
@@ -3516,6 +3615,12 @@ function iePointerDown(e) {
 }
 function iePointerMove(e) {
   const ring = $('#ieRing'), p = canvasPos(ie.work, e);
+  if (iePanning()) { ring.hidden = true; return; }
+  if (ie.tool === 'pick') {
+    ring.hidden = true;
+    if (ie.drawing) iePickColor(p);
+    return;
+  }
   if (ie.tool === 'select') {
     ring.hidden = true;
     if (ie.drag) ieSelDrag(p);
@@ -3564,7 +3669,8 @@ function ieCrop() {
 function closeImageEditor() {
   $('#imageEditor').hidden = true;
   $('#ieRing').hidden = true;
-  Object.assign(ie, { work: null, ctx: null, undo: [], drawing: false, sel: null, drag: null });
+  $('#ieStage').classList.remove('pan', 'panning');
+  Object.assign(ie, { work: null, ctx: null, undo: [], drawing: false, sel: null, drag: null, pan: null, space: false });
 }
 
 /* ======================================================================
@@ -4441,6 +4547,19 @@ function bindGenerate() {
   $('#ieErase').addEventListener('click', () => ieSetTool('erase'));
   $('#ieFillTool').addEventListener('click', () => ieSetTool('fill'));
   $('#ieSelect').addEventListener('click', () => ieSetTool('select'));
+  $('#iePick').addEventListener('click', () => ieSetTool('pick'));
+  $('#iePan').addEventListener('click', () => ieSetTool('pan'));
+  $('#ieDeselect').addEventListener('click', ieSelectNone);
+  $('#ieZoomReset').addEventListener('click', ieZoomReset);
+  $('#ieStage').addEventListener('wheel', ieWheel, { passive: false });
+  $('#ieStage').addEventListener('pointerdown', ieStagePointerDown, true);
+  $('#ieStage').addEventListener('pointermove', ieStagePointerMove);
+  $('#ieStage').addEventListener('pointerup', ieStagePointerUp);
+  $('#ieStage').addEventListener('pointercancel', ieStagePointerUp);
+  // Stops the middle button's autoscroll.
+  $('#ieStage').addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+  document.addEventListener('keyup', (e) => { if (e.key === ' ') ieSetSpace(false); });
+  window.addEventListener('blur', () => ieSetSpace(false));
   $('#ieCrop').addEventListener('click', ieCrop);
   $('#ieUndo').addEventListener('click', ieUndo);
   $('#ieClear').addEventListener('click', ieClear);
@@ -4459,6 +4578,12 @@ function bindGenerate() {
       else if (k === 'b') ieSetTool('paint');
       else if (k === 'f') ieSetTool('fill');
       else if (k === 's') ieSetTool('select');
+      else if (k === 'i') ieSetTool('pick');
+      else if (k === 'h') ieSetTool('pan');
+      else if (e.key === ' ') { e.preventDefault(); document.activeElement?.blur(); ieSetSpace(true); }
+      else if (e.key === '+' || e.key === '=') ieZoom(1.5);
+      else if (e.key === '-') ieZoom(1 / 1.5);
+      else if (e.key === '0') ieZoomReset();
       else if (e.key === '[' || e.key === ']') { const s = $('#ieSize'); s.value = Number(s.value) + (e.key === ']' ? 5 : -5); }
       return;
     }
