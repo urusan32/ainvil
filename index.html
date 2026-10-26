@@ -153,7 +153,7 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 #viewer .prev { left: 10px; } #viewer .next { right: 10px; }
 #viewer .dl { position: absolute; top: 10px; right: 64px; padding: 6px 12px; background: rgba(30,30,30,.8); color: #fff; z-index: 2; }
 #viewer a { display: contents; }
-#maskEditor { flex-direction: column; align-items: stretch; justify-content: flex-start; }
+#maskEditor, #imageEditor { flex-direction: column; align-items: stretch; justify-content: flex-start; }
 .mask-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: var(--bg2); border-bottom: 1px solid var(--line); color: var(--fg); }
 .mask-toolbar label { display: flex; align-items: center; gap: 6px; color: var(--fg); font-size: 13px; }
 .mask-toolbar input[type=range] { width: 140px; margin: 0; }
@@ -161,10 +161,13 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 .prefs { display: flex; flex-direction: column; gap: 10px; }
 .prefs .row { align-items: center; }
 .mask-toolbar .spacer { flex: 1; }
+.mask-toolbar [hidden] { display: none; }
 .mask-stage { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
 .mask-wrap { position: relative; overflow: hidden; }
 .mask-wrap img, .mask-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .mask-wrap canvas { opacity: .55; touch-action: none; cursor: none; }
+#ieWrap { background: repeating-conic-gradient(#999 0 25%, #ccc 0 50%) 0 0 / 16px 16px; }
+#ieWrap canvas { opacity: 1; }
 /* Focused inpainting's context window: the outside is dimmed; the corner handles show with the Window tool. */
 .ctx-box { position: absolute; z-index: 1; pointer-events: none; outline: 2px dashed #fff; box-shadow: 0 0 0 1px #000, 0 0 0 9999px rgba(0,0,0,.35); }
 .ctx-box i { position: absolute; width: 12px; height: 12px; background: #fff; border: 1px solid #000; transform: translate(-50%, -50%); display: none; }
@@ -335,7 +338,7 @@ table.map td:first-child .hint { display: block; }
       <h2>Input Image</h2>
       <div class="imgpair">
         <div class="imgcol">
-          <div class="caption">Image</div>
+          <div class="caption">Image <span class="hint">(click to edit)</span></div>
           <div class="dropbox" id="inputBox"><span class="ph">Drop an image here</span></div>
           <div class="actions">
             <button id="btnPickImage">Choose…</button>
@@ -602,6 +605,25 @@ table.map td:first-child .hint { display: block; }
   </div>
   <div class="mask-stage" id="meStage"><div class="mask-wrap" id="meWrap"><img id="meImg" alt=""><div id="meCtx" class="ctx-box" hidden><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div>
   <div class="brush-ring" id="meRing" hidden></div>
+</div>
+
+<!-- Image editor -->
+<div id="imageEditor" class="overlay" hidden>
+  <div class="mask-toolbar">
+    <div class="seg"><button id="iePaint" class="on" title="Paint (B; Alt+click picks a color)">Paint</button><button id="ieErase" title="Paint the original image back (X toggles Paint/Erase)">Erase</button><button id="ieFillTool" title="Flood fill with the paint color (F; Alt+click picks a color)">Fill</button><button id="ieSelect" title="Rectangular selection (S): drag outside to draw one, drag inside to move it, drag a corner to resize it, click outside to deselect (Ctrl+D). Paint, Erase and Fill stay inside it.">Select</button></div>
+    <button id="ieCrop" title="Crop the edited image (and the mask) to the selection, use it as the input image and add it to the Image Stash" hidden>Crop</button>
+    <label>Brush <input type="range" id="ieSize" min="1" max="300" value="20"></label>
+    <label title="Paint color (Alt+click on the image picks one)">Color <input type="color" id="ieColor" value="#ffffff"></label>
+    <label id="ieTolLabel" title="How different a pixel may be from the clicked one (in each channel) and still be filled" hidden>Tolerance <input type="range" id="ieTol" min="0" max="255" value="32"></label>
+    <button id="ieUndo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="ieClear" title="Discard all edits">Clear</button>
+    <span id="ieInfo" class="hint"></span>
+    <span class="spacer"></span>
+    <button id="ieCancel" title="Discard all edits (Esc)">Cancel</button>
+    <button id="ieDone" class="primary" title="Use the edited image as the input image and add it to the Image Stash">Done</button>
+  </div>
+  <div class="mask-stage" id="ieStage"><div class="mask-wrap" id="ieWrap"><div id="ieSel" class="ctx-box" hidden><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div>
+  <div class="brush-ring" id="ieRing" hidden></div>
 </div>
 
 <div class="toasts" id="toasts"></div>
@@ -2486,6 +2508,7 @@ function clearInputImage() {
 }
 function renderInput() {
   const box = $('#inputBox');
+  box.classList.toggle('clickable', !!input.img);
   box.replaceChildren(input.img
     ? h('img', { src: input.url, alt: input.name, title: `${input.name} · ${input.w}×${input.h}` })
     : h('span', { class: 'ph' }, 'Drop an image here'));
@@ -3178,14 +3201,15 @@ function meMaskChanged() {
   me.bounds = maskBounds(me.work);
   meRenderBox();
 }
-// Window tool: a corner resizes from the opposite corner, inside moves, outside draws a new window from that point.
-// The handle hit area is in screen pixels (k = image pixels per screen pixel).
-function meBoxHit(p) {
-  const b = me.box, r = 12 * p.k;
-  const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
+// Box tools (the mask editor's Window, the image editor's Select): a corner resizes from the opposite corner,
+// inside moves, outside draws a new box from that point. The handle hit area is in screen pixels
+// (k = image pixels per screen pixel). Without a box, everything is outside.
+function boxHit(b, p) {
+  const r = 12 * p.k;
+  const corners = !b ? [] : [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
   const ci = corners.findIndex(([x, y]) => Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r);
   if (ci >= 0) return { kind: 'resize', corner: ci, ax: corners[3 - ci][0], ay: corners[3 - ci][1] };
-  if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return { kind: 'move', dx: p.x - b.x, dy: p.y - b.y };
+  if (b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return { kind: 'move', dx: p.x - b.x, dy: p.y - b.y };
   return { kind: 'resize', ax: Math.min(Math.max(0, p.x), input.w), ay: Math.min(Math.max(0, p.y), input.h) };
 }
 function meBoxDrag(p) {
@@ -3208,23 +3232,35 @@ function meWheel(e) {
   me.box = conformBox({ x: b.x + b.w / 2 - (b.w * k) / 2, y: b.y + b.h / 2 - (b.h * k) / 2, w: b.w * k, h: b.h * k });
   meRenderBox();
 }
-function meBoxCursor(p) {
-  const hit = meBoxHit(p);
+function boxCursor(b, p) {
+  const hit = boxHit(b, p);
   if (hit.kind === 'move') return 'move';
   if (hit.corner == null) return 'crosshair';
   return hit.corner === 0 || hit.corner === 3 ? 'nwse-resize' : 'nesw-resize';
 }
+// Shared by the mask and image editors: fits the image into the stage, and maps a pointer event to image pixels.
+function fitStage(stage, wrap) {
+  const s = Math.min((stage.clientWidth - 20) / input.w, (stage.clientHeight - 20) / input.h);
+  wrap.style.width = Math.floor(input.w * s) + 'px';
+  wrap.style.height = Math.floor(input.h * s) + 'px';
+}
+function canvasPos(c, e) {
+  const r = c.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height, k: c.width / r.width };
+}
+function showRing(ring, e, size) {
+  ring.hidden = e.pointerType === 'touch';
+  Object.assign(ring.style, { left: e.clientX + 'px', top: e.clientY + 'px', width: size + 'px', height: size + 'px' });
+}
+function cropCanvas(src, b) {
+  const c = h('canvas', { width: b.w, height: b.h });
+  c.getContext('2d').drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+  return c;
+}
 function fitMaskEditor() {
-  if ($('#maskEditor').hidden) return;
-  const st = $('#meStage');
-  const s = Math.min((st.clientWidth - 20) / input.w, (st.clientHeight - 20) / input.h);
-  $('#meWrap').style.width = Math.floor(input.w * s) + 'px';
-  $('#meWrap').style.height = Math.floor(input.h * s) + 'px';
+  if (!$('#maskEditor').hidden) fitStage($('#meStage'), $('#meWrap'));
 }
-function mePos(e) {
-  const r = me.work.getBoundingClientRect();
-  return { x: (e.clientX - r.left) * me.work.width / r.width, y: (e.clientY - r.top) * me.work.height / r.height, k: me.work.width / r.width };
-}
+function mePos(e) { return canvasPos(me.work, e); }
 function meStroke(a, b) {
   const ctx = me.ctx;
   ctx.globalCompositeOperation = me.tool === 'erase' ? 'destination-out' : 'source-over';
@@ -3244,7 +3280,7 @@ function mePointerDown(e) {
   e.preventDefault();
   try { me.work.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
   if (me.tool === 'window') {
-    me.drag = meBoxHit(mePos(e));
+    me.drag = boxHit(me.box, mePos(e));
     return;
   }
   mePushUndo();
@@ -3258,12 +3294,10 @@ function mePointerMove(e) {
     ring.hidden = true;
     const p = mePos(e);
     if (me.drag) meBoxDrag(p);
-    else me.work.style.cursor = meBoxCursor(p);
+    else me.work.style.cursor = boxCursor(me.box, p);
     return;
   }
-  const sz = Number($('#meSize').value);
-  ring.hidden = e.pointerType === 'touch';
-  Object.assign(ring.style, { left: e.clientX + 'px', top: e.clientY + 'px', width: sz + 'px', height: sz + 'px' });
+  showRing(ring, e, Number($('#meSize').value));
   if (!me.drawing) return;
   const p = mePos(e);
   meStroke(me.last, p);
@@ -3310,15 +3344,10 @@ function meUndo() {
 async function meCrop() {
   const b = roundBox(me.box);
   if (!b) return;
-  const crop = (src) => {
-    const c = h('canvas', { width: b.w, height: b.h });
-    c.getContext('2d').drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
-    return c;
-  };
-  const mask = crop(me.work);
+  const mask = cropCanvas(me.work, b);
   const name = `${input.name.replace(/\.[^.]*$/, '')}_crop_${b.w}x${b.h}.png`;
   try {
-    const blob = await canvasToBlob(crop(input.img));
+    const blob = await canvasToBlob(cropCanvas(input.img, b));
     closeMaskEditor(false);
     await setInputImage(blob, name);
     setMask(mask);
@@ -3334,6 +3363,208 @@ function closeMaskEditor(apply) {
   $('#maskEditor').hidden = true;
   $('#meRing').hidden = true;
   me.work = null; me.ctx = null; me.undo = []; me.box = null; me.drag = null;
+}
+
+/* ---------- image editor ---------- */
+// Edits a copy of the input image (`work`); Done makes it the input image and stashes it, Cancel drops it.
+// tool: paint, erase (paints the original back), fill (flood fill) or select (rectangular selection `sel`,
+// whole pixels once a drag ends). Paint, erase and fill stay inside the selection.
+const ie = { work: null, ctx: null, tool: 'paint', undo: [], drawing: false, last: null, sel: null, drag: null };
+const IE_UNDO_BYTES = 256e6;  // full-image snapshots add up fast at large sizes
+function openImageEditor() {
+  if (!input.img) return;
+  const c = h('canvas', { width: input.w, height: input.h });
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(input.img, 0, 0);
+  Object.assign(ie, { work: c, ctx, undo: [], drawing: false, sel: null, drag: null });
+  $('#ieWrap').querySelector('canvas')?.remove();
+  $('#ieWrap').prepend(c);
+  c.addEventListener('pointerdown', iePointerDown);
+  c.addEventListener('pointermove', iePointerMove);
+  c.addEventListener('pointerup', iePointerUp);
+  c.addEventListener('pointercancel', iePointerUp);
+  c.addEventListener('pointerleave', () => { $('#ieRing').hidden = true; });
+  $('#imageEditor').hidden = false;
+  fitImageEditor();
+  ieSetTool(ie.tool);
+}
+function fitImageEditor() {
+  if (!$('#imageEditor').hidden) fitStage($('#ieStage'), $('#ieWrap'));
+}
+function ieRenderSel() {
+  const el = $('#ieSel'), b = ie.sel;
+  el.hidden = !b;
+  $('#ieCrop').hidden = !b;
+  $('#ieInfo').textContent = b ? `Selection ${Math.round(b.w)}×${Math.round(b.h)}` : '';
+  if (!b) return;
+  const pct = (v, of) => (v / of) * 100 + '%';
+  Object.assign(el.style, { left: pct(b.x, input.w), top: pct(b.y, input.h), width: pct(b.w, input.w), height: pct(b.h, input.h) });
+  el.classList.toggle('edit', ie.tool === 'select');
+}
+function ieSetTool(tool) {
+  ie.tool = tool;
+  for (const [id, t] of [['#iePaint', 'paint'], ['#ieErase', 'erase'], ['#ieFillTool', 'fill'], ['#ieSelect', 'select']]) $(id).classList.toggle('on', tool === t);
+  $('#ieTolLabel').hidden = tool !== 'fill';
+  if (ie.work) ie.work.style.cursor = tool === 'fill' ? 'crosshair' : '';
+  ieRenderSel();
+}
+function ieSelectNone() {
+  ie.sel = null;
+  ieRenderSel();
+}
+function iePushUndo() {
+  ie.undo.push(ie.ctx.getImageData(0, 0, input.w, input.h));
+  const max = Math.max(2, Math.min(20, Math.floor(IE_UNDO_BYTES / (input.w * input.h * 4))));
+  while (ie.undo.length > max) ie.undo.shift();
+}
+function ieUndo() {
+  const d = ie.undo.pop();
+  if (d) ie.ctx.putImageData(d, 0, 0);
+}
+function ieClear() {
+  if (!ie.undo.length) return;
+  iePushUndo();
+  ie.ctx.globalCompositeOperation = 'copy';
+  ie.ctx.drawImage(input.img, 0, 0);
+  ie.ctx.globalCompositeOperation = 'source-over';
+}
+function ieClip(ctx) {
+  const b = ie.sel;
+  if (!b) return;
+  ctx.beginPath();
+  ctx.rect(b.x, b.y, b.w, b.h);
+  ctx.clip();
+}
+function ieStroke(a, b) {
+  const ctx = ie.ctx;
+  ctx.save();
+  ieClip(ctx);
+  // Erase paints the original image back through a pattern, which lines up with the canvas pixels.
+  ctx.strokeStyle = ie.tool === 'erase' ? ctx.createPattern(input.img, 'no-repeat') : $('#ieColor').value;
+  ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.lineWidth = Number($('#ieSize').value) * b.k;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x + 0.01, b.y);
+  ctx.stroke();
+  ctx.restore();
+}
+// Scanline flood fill from `p` with the paint color, over pixels whose channels (alpha included) are all within
+// Tolerance of the clicked pixel, inside the selection.
+function ieFloodFill(p) {
+  const r = ie.sel || { x: 0, y: 0, w: input.w, h: input.h };
+  const sx = Math.floor(p.x) - r.x, sy = Math.floor(p.y) - r.y, W = r.w, H = r.h;
+  if (sx < 0 || sy < 0 || sx >= W || sy >= H) return;
+  iePushUndo();
+  const d = ie.ctx.getImageData(r.x, r.y, W, H), px = d.data;
+  const si = (sy * W + sx) * 4, t = [px[si], px[si + 1], px[si + 2], px[si + 3]];
+  const tol = Number($('#ieTol').value), c = $('#ieColor').value;
+  const fill = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)).concat(255);
+  const seen = new Uint8Array(W * H);
+  const match = (i) => {
+    if (seen[i]) return false;
+    const o = i * 4;
+    return Math.abs(px[o] - t[0]) <= tol && Math.abs(px[o + 1] - t[1]) <= tol && Math.abs(px[o + 2] - t[2]) <= tol && Math.abs(px[o + 3] - t[3]) <= tol;
+  };
+  const stack = [sx, sy];
+  while (stack.length) {
+    const y = stack.pop();
+    let x = stack.pop(), i = y * W + x;
+    if (!match(i)) continue;
+    while (x > 0 && match(i - 1)) { x--; i--; }
+    let up = false, down = false;
+    for (; x < W && match(i); x++, i++) {
+      seen[i] = 1;
+      px.set(fill, i * 4);
+      if (y > 0) { const m = match(i - W); if (m && !up) stack.push(x, y - 1); up = m; }
+      if (y < H - 1) { const m = match(i + W); if (m && !down) stack.push(x, y + 1); down = m; }
+    }
+  }
+  ie.ctx.putImageData(d, r.x, r.y);
+}
+// Alt+click picks the color under the pointer.
+function iePickColor(p) {
+  const x = Math.min(input.w - 1, Math.max(0, Math.floor(p.x))), y = Math.min(input.h - 1, Math.max(0, Math.floor(p.y)));
+  const d = ie.ctx.getImageData(x, y, 1, 1).data;
+  $('#ieColor').value = '#' + [d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+function ieSelDrag(p) {
+  const d = ie.drag, b = ie.sel, clamp = (v, max) => Math.min(Math.max(0, v), max);
+  if (d.kind === 'move') {
+    ie.sel = { ...b, x: clamp(p.x - d.dx, input.w - b.w), y: clamp(p.y - d.dy, input.h - b.h) };
+  } else {
+    const x = clamp(p.x, input.w), y = clamp(p.y, input.h);
+    ie.sel = { x: Math.min(x, d.ax), y: Math.min(y, d.ay), w: Math.abs(x - d.ax), h: Math.abs(y - d.ay) };
+  }
+  ieRenderSel();
+}
+function iePointerDown(e) {
+  e.preventDefault();
+  try { ie.work.setPointerCapture(e.pointerId); } catch { /* synthetic or already-released pointer */ }
+  const p = canvasPos(ie.work, e);
+  if (ie.tool === 'select') {
+    ie.drag = boxHit(ie.sel, p);
+    if (ie.drag.kind === 'resize') ieSelDrag(p);
+    return;
+  }
+  if (e.altKey) return iePickColor(p);
+  if (ie.tool === 'fill') return ieFloodFill(p);
+  iePushUndo();
+  ie.drawing = true;
+  ie.last = p;
+  ieStroke(p, p);
+}
+function iePointerMove(e) {
+  const ring = $('#ieRing'), p = canvasPos(ie.work, e);
+  if (ie.tool === 'select') {
+    ring.hidden = true;
+    if (ie.drag) ieSelDrag(p);
+    else ie.work.style.cursor = boxCursor(ie.sel, p);
+    return;
+  }
+  if (ie.tool === 'fill') { ring.hidden = true; return; }
+  showRing(ring, e, Number($('#ieSize').value));
+  if (!ie.drawing) return;
+  ieStroke(ie.last, p);
+  ie.last = p;
+}
+function iePointerUp() {
+  ie.drawing = false;
+  if (!ie.drag) return;
+  ie.drag = null;
+  // A click outside the selection (an empty drag) deselects.
+  const b = ie.sel && roundBox(ie.sel);
+  ie.sel = b && ie.sel.w >= 0.5 && ie.sel.h >= 0.5 ? b : null;
+  ieRenderSel();
+}
+function ieBaseName() {
+  return input.name.replace(/\.[^.]*$/, '').replace(/_edit$/, '');
+}
+// Makes canvas `c` the input image (cropping the mask to `crop`, if given) and stashes it.
+async function ieApply(c, name, crop, msg) {
+  const mask = crop && input.mask && cropCanvas(input.mask, crop);
+  closeImageEditor();
+  try {
+    const blob = await canvasToBlob(c);
+    await setInputImage(blob, name);
+    if (crop) setMask(mask);
+    await stashAdd(blob, { filename: name });
+    toast(msg);
+  } catch (e) { toast('Could not update the input image: ' + errText(e), 'error'); }
+}
+function ieDone() {
+  if (!ie.undo.length) return closeImageEditor();
+  ieApply(ie.work, `${ieBaseName()}_edit.png`, null, 'Edited the input image and added it to the Image Stash');
+}
+// Crops the edited image (and the mask) to the selection.
+function ieCrop() {
+  const b = ie.sel;
+  if (b) ieApply(cropCanvas(ie.work, b), `${ieBaseName()}_crop_${b.w}x${b.h}.png`, b, `Cropped to ${b.w}×${b.h} and added it to the Image Stash`);
+}
+function closeImageEditor() {
+  $('#imageEditor').hidden = true;
+  $('#ieRing').hidden = true;
+  Object.assign(ie, { work: null, ctx: null, undo: [], drawing: false, sel: null, drag: null });
 }
 
 /* ======================================================================
@@ -4173,7 +4404,7 @@ function bindGenerate() {
 
   // input image
   makeDropZone($('#inputBox'), (f) => setInputImage(f, f.name));
-  $('#inputBox').addEventListener('click', () => { if (!input.img) $('#fileImage').click(); });
+  $('#inputBox').addEventListener('click', () => { if (input.img) openImageEditor(); else $('#fileImage').click(); });
   $('#btnPickImage').addEventListener('click', () => $('#fileImage').click());
   $('#fileImage').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) setInputImage(f, f.name); e.target.value = ''; });
   $('#btnClearImage').addEventListener('click', clearInputImage);
@@ -4185,6 +4416,7 @@ function bindGenerate() {
   $('#btnClearMask').addEventListener('click', () => setMask(null));
   document.addEventListener('paste', (e) => {
     if (!$('#tab-generate').classList.contains('active')) return;
+    if (!$('#maskEditor').hidden || !$('#imageEditor').hidden) return;
     if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) return;
     const f = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith('image/'));
     if (f) setInputImage(f, f.name || 'pasted.png');
@@ -4204,7 +4436,32 @@ function bindGenerate() {
   $('#meColor').addEventListener('input', (e) => setMaskColor(e.target.value, { save: false }));
   $('#meColor').addEventListener('change', (e) => setMaskColor(e.target.value));
 
+  // image editor
+  $('#iePaint').addEventListener('click', () => ieSetTool('paint'));
+  $('#ieErase').addEventListener('click', () => ieSetTool('erase'));
+  $('#ieFillTool').addEventListener('click', () => ieSetTool('fill'));
+  $('#ieSelect').addEventListener('click', () => ieSetTool('select'));
+  $('#ieCrop').addEventListener('click', ieCrop);
+  $('#ieUndo').addEventListener('click', ieUndo);
+  $('#ieClear').addEventListener('click', ieClear);
+  $('#ieCancel').addEventListener('click', closeImageEditor);
+  $('#ieDone').addEventListener('click', ieDone);
+
   document.addEventListener('keydown', (e) => {
+    if (!$('#imageEditor').hidden) {
+      if (e.target.tagName === 'INPUT' && e.key !== 'Escape') return;
+      const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+      if (e.key === 'Escape') closeImageEditor();
+      else if (k === 'z' && mod) { e.preventDefault(); ieUndo(); }
+      else if (k === 'd' && mod) { e.preventDefault(); ieSelectNone(); }
+      else if (mod || e.altKey) return;
+      else if (k === 'x') ieSetTool(ie.tool === 'erase' ? 'paint' : 'erase');
+      else if (k === 'b') ieSetTool('paint');
+      else if (k === 'f') ieSetTool('fill');
+      else if (k === 's') ieSetTool('select');
+      else if (e.key === '[' || e.key === ']') { const s = $('#ieSize'); s.value = Number(s.value) + (e.key === ']' ? 5 : -5); }
+      return;
+    }
     if (!$('#maskEditor').hidden) {
       if (e.key === 'Escape') closeMaskEditor(false);
       else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); meUndo(); }
@@ -4222,7 +4479,7 @@ function bindGenerate() {
     if (!$('#historyDlg').hidden && e.key === 'Escape') closeHistory();
     if (!$('#stashDlg').hidden && e.key === 'Escape') closeStash();
   });
-  window.addEventListener('resize', () => { layout(); fitMaskEditor(); });
+  window.addEventListener('resize', () => { layout(); fitMaskEditor(); fitImageEditor(); });
 }
 
 function bindExtras() {
