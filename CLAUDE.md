@@ -4,7 +4,8 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 
 ## Shape
 - Everything is in `index.html`: CSS, markup, and one inline `<script>`. There's no build step and no dependencies. Ask the user before adding any.
-- The default Anima workflows (ComfyUI **UI format**) sit in `<script type="application/json" id="default-workflows">`. They're generated from `workflows/*-minworkflow-cads.json` by `tools/embed-workflows.py`, so don't hand-edit that blob. The plain `*-minworkflow.json` files are the same graphs without the CADS node (handy for testing the "not configured" path).
+- The default workflows (ComfyUI **UI format**) sit in `<script type="application/json" id="default-workflows">` as `{Anima: {mode: wf}, MOSS: {…}}`. They're generated from `workflows/{,moss-}*-minworkflow-cads.json` by `tools/embed-workflows.py`, so don't hand-edit that blob. The plain `*-minworkflow.json` files are the Anima graphs without the CADS node (handy for testing the "not configured" path).
+- The MOSS workflows are made from the Anima ones by `tools/make-moss-workflows.py`, which keeps the node ids, so both use `defaultFw()`'s mappings. MOSS adds Skip Layer Guidance: #64 `SkipLayerGuidanceDiTSimple` and #65 `ComfySwitchNode` (LoRA chain vs. SLG → CADS), driven by custom parameters. `workflows/image_moss_image_t2i.json` is ComfyUI's original MOSS template (subgraph, not used directly).
 - The app default is `http://localhost:8188/`.
 
 ## Key design decisions

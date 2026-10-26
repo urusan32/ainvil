@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Embed workflows/*-minworkflow-cads.json into index.html as the default Anima workflows.
+"""Embed the default workflows into index.html, keyed by functional workflow:
+  Anima: workflows/{mode}-minworkflow-cads.json
+  MOSS:  workflows/moss-{mode}-minworkflow-cads.json (made by tools/make-moss-workflows.py)
 
-The plain *-minworkflow.json files are the same workflows without the CADS node.
+The plain *-minworkflow.json files are the Anima workflows without the CADS node.
 
 Usage: python3 tools/embed-workflows.py
 """
@@ -10,9 +12,13 @@ import pathlib
 import re
 
 root = pathlib.Path(__file__).resolve().parent.parent
+sets = {"Anima": "", "MOSS": "moss-"}
 wfs = {
-    mode: json.loads((root / "workflows" / f"{mode}-minworkflow-cads.json").read_text())
-    for mode in ("txt2img", "img2img", "inpainting")
+    name: {
+        mode: json.loads((root / "workflows" / f"{prefix}{mode}-minworkflow-cads.json").read_text())
+        for mode in ("txt2img", "img2img", "inpainting")
+    }
+    for name, prefix in sets.items()
 }
 blob = json.dumps(wfs, separators=(",", ":")).replace("</", "<\\/")
 html_path = root / "index.html"

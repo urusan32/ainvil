@@ -40,8 +40,8 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
 - **LoRA**: add any number of LoRAs from the server, filtered to the workflow's model family, with a weight for each.
   - The search box narrows every LoRA list to names containing the words you type, and **+ Add LoRA** adds the first match.
   - The **On/Off** button keeps a LoRA in the list without using it.
-- **Custom Parameters**: extra settings defined by the selected workflow. Anima has *Resize method* and *Filename prefix*.
-- **CADS** (Condition-Annealed Diffusion Sampler): adds scheduled noise to the conditioning for more varied images. It needs the [comfyui-cads](https://github.com/asagi4/ComfyUI-CADS) extension on the server and a workflow with a CADS node (the built-in Anima workflows have one).
+- **Custom Parameters**: extra settings defined by the selected workflow. Anima and MOSS have *Resize method* and *Filename prefix*; MOSS also has the Skip Layer Guidance settings (*Skip layer guidance* on/off, off by default, plus its layers and start/end percent).
+- **CADS** (Condition-Annealed Diffusion Sampler): adds scheduled noise to the conditioning for more varied images. It needs the [comfyui-cads](https://github.com/asagi4/ComfyUI-CADS) extension on the server and a workflow with a CADS node (the built-in Anima and MOSS workflows have one).
   - **Enable CADS** turns it on or off. When it's off, unsupported by the server (*Server Features › CADS*), or not configured for the workflow, the CADS node is bypassed and the section says why.
   - The settings start at the workflow's CADS node values. **Total steps** follows the main Steps whenever Steps changes, but changing it doesn't change Steps. The CADS seed follows the image seed.
 
@@ -75,8 +75,9 @@ Each workflow can be exported and imported on its own. All exported files carry 
 
 ## Development
 
-The default Anima workflows live in `workflows/` (`*-minworkflow-cads.json`; the plain `*-minworkflow.json` files are the same graphs without CADS) and are embedded into `index.html`. After editing them, run:
+The default Anima workflows live in `workflows/` (`*-minworkflow-cads.json`; the plain `*-minworkflow.json` files are the same graphs without CADS) and are embedded into `index.html`. The MOSS workflows (`moss-*-minworkflow-cads.json`) are derived from the Anima ones. After editing them, run:
 
 ```sh
+python3 tools/make-moss-workflows.py   # after changing the Anima workflows
 python3 tools/embed-workflows.py
 ```
