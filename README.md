@@ -18,6 +18,7 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
 ## Generate tab
 
 - **Main**: choose the functional workflow and model, write the prompt and negative prompt, and set the batch count (1–128 separate queue entries).
+  - The **Search** box next to the model list shows only models whose names contain all the words you type.
   - **Clear** resets the page.
   - **Generate Workflow** downloads the ComfyUI API-format workflow for the first image instead of running it.
 - **Generation Parameters**: resolution presets (1024 / 1536 × Square / Landscape / Portrait, or Custom), seed (with a Random toggle), batch size, steps, CFG, sampler and scheduler.
@@ -25,14 +26,19 @@ Ainvil is a single-page web app for common image generation workflows with Comfy
   - Click the mask box to paint a mask, which switches to **inpainting**.
   - In the mask editor: `[` and `]` change the brush size, `x` toggles erase, Ctrl+Z undoes.
   - Masks can also be uploaded or downloaded. They are white-on-black PNGs, where white means "regenerate".
+  - If the mask color is hard to see on your image, change it with **Color** in the mask editor (or in *Client Preferences*). This only changes how the mask is displayed.
 - **Input Parameters**: denoise is set as a *start step*.
   - With 30 steps, step 12 is denoise 0.60. The value field, step field and slider stay in sync.
+  - Moving the slider right increases the denoise.
   - Crop and Noise Mask apply to img2img and inpainting.
 - **Output Gallery**: shows the latest run.
-  - Click the large image for a full-screen view: arrow keys browse, Esc closes, and you can right-click to save.
+  - Click the large image for a full-screen view: arrow keys browse and Esc closes. Save with the viewer's **Download** button or by right-clicking.
+  - When the page is served over http(s), right-click › *Save Image As* uses the image's real filename. Opened from disk (`file://`), Firefox can only show the image as a nameless blob, so use **Download** or right-click › *Save Link As* to get the real filename.
   - **Download All** downloads the whole run as a ZIP file.
   - **Use Seed** copies the selected image's seed into the Seed field. **Use as Input** loads the image as the input image for img2img.
 - **LoRA**: add any number of LoRAs from the server, filtered to the workflow's model family, with a weight for each.
+  - The search box narrows every LoRA list to names containing the words you type, and **+ Add LoRA** adds the first match.
+  - The **On/Off** button keeps a LoRA in the list without using it.
 - **Custom Parameters**: extra settings defined by the selected workflow. Anima has *Resize method* and *Filename prefix*.
 
 The page remembers your Generate settings (not images) between visits.
@@ -42,6 +48,7 @@ The page remembers your Generate settings (not images) between visits.
 Configuration is stored in the browser's `localStorage` and can be moved between computers:
 
 - **Global Import & Export**: export everything as one JSON file, or import a file to replace the current configuration.
+- **Client Preferences**: number of gallery thumbnails per row (2, 3 or 4), rows shown before the thumbnails scroll (1 or 2), and the mask display color.
 - **Functional Workflows**: each one has a name and model/LoRA filters (regular expressions, case-insensitive). It also has three ComfyUI workflows (txt2img, img2img, inpainting) with *mappings* that say which node input receives each Generate-tab value. Workflows can be loaded from ComfyUI's JSON (UI or API format) or from a ComfyUI PNG. **Auto-detect mappings** makes a good first guess for standard graphs.
 - **Custom Workflows**: open-ended workflows for the (upcoming) Extras tab, each with its own parameters and mappings.
 

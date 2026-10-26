@@ -22,6 +22,9 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 - `%date:…%` / `%Title.widget%` in `filename_prefix` are expanded client-side, because the ComfyUI server doesn't do it.
 - Completion is detected by polling `/history/{id}`. The WebSocket is only used for progress and queue display.
 - Combo options (models, samplers, LoRAs, custom combos) come from `/object_info` for the mapped node's class/input. Models and LoRAs are then filtered by the workflow's regex.
+- `clientPreferences` in the config holds gallery columns/rows and the mask display color. The mask canvas's RGB is only for display (`recolorMask()`): only alpha is the mask, so changing the color doesn't change upload hashes.
+- The full-screen viewer tries the direct `/view` URL first, because ComfyUI's `Content-Disposition` filename then names "Save Image As". From `file://`, Firefox refuses it, so the viewer falls back to the blob URL inside an `<a download>` link.
+- Model/LoRA **search** (`searchList`, plain words, AND) runs on top of the workflow's regex filter (`filterList`).
 - Config schema version is `CONFIG_VERSION = 1`; keep it at 1 during alpha. localStorage keys: `ainvil.config`, `ainvil.generate` (form state), `ainvil.tab`.
 - The Generate layout is 3, 2 or 1 columns. `LAYOUTS` moves the section elements between columns, and the dynamic-height sections (Custom Parameters, LoRA) sit at the bottom of their columns.
 
@@ -31,6 +34,8 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 
 ## Testing
 Headless Firefox driven over Marionette (raw socket, Python stdlib) works well for end-to-end checks against the test server.
+- Start Firefox with `-remote-allow-system-access` if you need the chrome context (e.g. to inspect `gContextMenu`).
+- Top-level `let`/`const` (`gen`, `config`, `gallery`) aren't on `window`; read them with an indirect `(0, window.eval)(…)`.
 - Include `safe,` in every test prompt.
 - Set the Filename prefix custom parameter to `ainvil-test/...` so test outputs land in one folder.
 - Never delete outputs or other files while testing; the user cleans up.

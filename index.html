@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ainvil</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -3 31 31'%3E%3Cpath fill='%23e0803a' d='M2 11c4-1.6 6.5-2.6 9-2.6h18v4.8h-3.4c-2.2.8-3.3 2.6-3.3 5.3v.7h3.2l2.3 5.6H7.6l2.3-5.6h3.6v-.7c0-2-1-3.4-2.9-4.2C7.6 14.3 4.6 13.4 2 11z'/%3E%3Cpath fill='%23f6c08a' d='M24.5 1.2l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z'/%3E%3C/svg%3E">
 <style>
 :root {
   --bg: #15171c; --bg2: #1d2027; --card: #22262e; --line: #343a45; --line2: #2b3039;
@@ -49,8 +50,10 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: v
 h3 { font-size: 14px; margin: 14px 0 8px; }
 
 .topbar { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--bg2); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; flex-wrap: wrap; }
-.brand { font-weight: 700; font-size: 18px; letter-spacing: .02em; }
-.brand span { color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 18px; letter-spacing: .02em; }
+.brand svg { width: 32px; height: 27px; flex: none; }
+.brand .logo-body { fill: var(--accent); } .brand .logo-spark { fill: var(--accent2); }
+.brand b { color: var(--accent); font-weight: 800; }
 .tabs { display: flex; gap: 4px; }
 .tab { background: none; border: 1px solid transparent; }
 .tab.active { background: var(--card); border-color: var(--line); color: var(--accent); font-weight: 600; }
@@ -94,7 +97,9 @@ main { padding: var(--gap) 16px 40px; }
 .gallery-main img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
 .placeholder, .ph { color: var(--muted); font-size: 13px; text-align: center; padding: 12px; pointer-events: none; }
 .gallery-info { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 1.4em; word-break: break-all; }
-.thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; max-height: calc(3 * (var(--thumb, 90px) + 6px)); overflow-y: auto; }
+.thumbs-wrap { container-type: inline-size; margin-top: 8px; }
+.thumbs { --cols: 3; --rows: 2; display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 6px; overflow-y: auto;
+  max-height: calc(var(--rows) * (100cqw - (var(--cols) - 1) * 6px) / var(--cols) + (var(--rows) - 1) * 6px); }
 .thumbs:empty { display: none; }
 .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; border: 2px solid transparent; cursor: pointer; background: var(--input); display: block; }
 .thumbs img.sel { border-color: var(--accent); }
@@ -112,7 +117,14 @@ input[type=range] { width: 100%; margin-top: 10px; accent-color: var(--accent); 
 .checks { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
 
 .lora-list { display: flex; flex-direction: column; gap: 6px; min-height: calc(8 * 36px); }
-.lora-row { display: grid; grid-template-columns: 1fr 80px auto; gap: 6px; align-items: center; }
+.lora-row { display: grid; grid-template-columns: auto 1fr 80px auto; gap: 6px; align-items: center; }
+.lora-row.off select, .lora-row.off input { opacity: .45; }
+.lora-row .toggle { min-width: 42px; }
+.searchsel { display: flex; gap: 6px; margin-top: 3px; }
+.searchsel select { flex: 1 1 auto; min-width: 0; }
+.searchsel input[type=search] { flex: 0 1 90px; }
+input[type=search] { background: var(--input); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; min-width: 0; }
+.lora-search { margin-bottom: 8px; }
 .lora-empty { color: var(--muted); font-size: 13px; }
 .custom-params { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
@@ -122,10 +134,15 @@ input[type=range] { width: 100%; margin-top: 10px; accent-color: var(--accent); 
 #viewer img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
 #viewer .nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; background: rgba(30,30,30,.6); color: #fff; padding: 10px 14px; }
 #viewer .prev { left: 10px; } #viewer .next { right: 10px; }
+#viewer .dl { position: absolute; top: 10px; right: 64px; padding: 6px 12px; background: rgba(30,30,30,.8); color: #fff; z-index: 2; }
+#viewer a { display: contents; }
 #maskEditor { flex-direction: column; align-items: stretch; justify-content: flex-start; }
 .mask-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: var(--bg2); border-bottom: 1px solid var(--line); color: var(--fg); }
 .mask-toolbar label { display: flex; align-items: center; gap: 6px; color: var(--fg); font-size: 13px; }
 .mask-toolbar input[type=range] { width: 140px; margin: 0; }
+.mask-toolbar input[type=color], .prefs input[type=color] { width: 40px; height: 28px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--input); cursor: pointer; }
+.prefs { display: flex; flex-direction: column; gap: 10px; }
+.prefs .row { align-items: center; }
 .mask-toolbar .spacer { flex: 1; }
 .mask-stage { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
 .mask-wrap { position: relative; }
@@ -174,7 +191,13 @@ table.map td:first-child .hint { display: block; }
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">Ain<span>vil</span></div>
+  <div class="brand">
+    <svg viewBox="1 0 30 25" aria-hidden="true">
+      <path class="logo-body" d="M2 11c4-1.6 6.5-2.6 9-2.6h18v4.8h-3.4c-2.2.8-3.3 2.6-3.3 5.3v.7h3.2l2.3 5.6H7.6l2.3-5.6h3.6v-.7c0-2-1-3.4-2.9-4.2C7.6 14.3 4.6 13.4 2 11z"/>
+      <path class="logo-spark" d="M24.5 1.2l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/>
+    </svg>
+    <span><b>AI</b>nvil</span>
+  </div>
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="generate" role="tab">Generate</button>
     <button class="tab" data-tab="extras" role="tab">Extras</button>
@@ -193,7 +216,13 @@ table.map td:first-child .hint { display: block; }
       <h2>Main</h2>
       <div class="grid2">
         <label>Functional Workflow <select id="fwSelect"></select></label>
-        <label>Model <select id="modelSelect"></select></label>
+        <div>
+          <label for="modelSelect">Model</label>
+          <div class="searchsel">
+            <select id="modelSelect"></select>
+            <input type="search" id="modelSearch" placeholder="Search" spellcheck="false" title="Show only models whose names contain this text">
+          </div>
+        </div>
       </div>
       <label class="stack">Prompt <textarea id="prompt" rows="8" spellcheck="false"></textarea></label>
       <label class="stack">Negative Prompt <textarea id="negative" rows="3" spellcheck="false"></textarea></label>
@@ -246,7 +275,7 @@ table.map td:first-child .hint { display: block; }
       <h2>Output Gallery</h2>
       <div class="gallery-main" id="galleryMain"><div class="placeholder">No images yet</div></div>
       <div class="gallery-info" id="galleryInfo"></div>
-      <div class="thumbs" id="galleryThumbs"></div>
+      <div class="thumbs-wrap"><div class="thumbs" id="galleryThumbs"></div></div>
       <div class="actions">
         <button id="btnDlSel">Download Selected</button>
         <button id="btnDlAll">Download All</button>
@@ -286,7 +315,7 @@ table.map td:first-child .hint { display: block; }
         <label>Denoise <input id="denoiseValue" type="number" min="0" max="1" step="0.01"></label>
         <label>Denoise step (start step) <input id="denoiseStep" type="number" min="0" step="1"></label>
       </div>
-      <input type="range" id="denoiseSlider" min="0" max="30" step="1" aria-label="Denoise step">
+      <input type="range" id="denoiseSlider" min="0" max="30" step="1" aria-label="Denoise (right = more denoise)">
       <div class="checks">
         <label class="chk"><input type="checkbox" id="crop"> Crop</label>
         <label class="chk"><input type="checkbox" id="noiseMask"> Noise Mask</label>
@@ -301,6 +330,7 @@ table.map td:first-child .hint { display: block; }
 
     <section class="card" id="sec-lora">
       <h2>LoRA</h2>
+      <input type="search" id="loraSearch" class="lora-search" placeholder="Search LoRAs" spellcheck="false" title="Show only LoRAs whose names contain this text; + Add LoRA adds the first match">
       <div id="loraList" class="lora-list"></div>
       <div class="actions"><button id="btnAddLora">+ Add LoRA</button></div>
     </section>
@@ -364,6 +394,21 @@ table.map td:first-child .hint { display: block; }
       <span class="hint"> — save outputs on the server. When off, images are returned through the API as unsaved previews.</span>
     </section>
 
+    <section class="card">
+      <h2>Client Preferences</h2>
+      <div class="prefs">
+        <div class="row">
+          <label>Gallery thumbnails per row <select id="cfgGalleryCols"><option>2</option><option>3</option><option>4</option></select></label>
+          <label>Gallery rows before scrolling <select id="cfgGalleryRows"><option>1</option><option>2</option></select></label>
+        </div>
+        <div class="row">
+          <label class="chk">Mask color <input type="color" id="cfgMaskColor"></label>
+          <button id="btnMaskColorReset" class="small">Reset to default</button>
+          <span class="hint">Pick a color that stands out from the image you're masking. Only changes the display.</span>
+        </div>
+      </div>
+    </section>
+
     <details class="card collapsible" id="fwSection" open>
       <summary><h2>Functional Workflows (Generate)</h2></summary>
       <div class="actions">
@@ -390,8 +435,9 @@ table.map td:first-child .hint { display: block; }
 <!-- Full screen image viewer -->
 <div id="viewer" class="overlay" hidden>
   <button class="close" id="viewerClose" title="Close (Esc)">×</button>
+  <button class="dl" id="viewerDl" title="Download this image">Download</button>
   <button class="nav prev" id="viewerPrev" title="Previous">‹</button>
-  <img id="viewerImg" alt="Generated image">
+  <a id="viewerLink"><img id="viewerImg" alt="Generated image"></a>
   <button class="nav next" id="viewerNext" title="Next">›</button>
 </div>
 
@@ -400,6 +446,7 @@ table.map td:first-child .hint { display: block; }
   <div class="mask-toolbar">
     <div class="seg"><button id="mePaint" class="on">Paint</button><button id="meErase">Erase</button></div>
     <label>Brush <input type="range" id="meSize" min="2" max="300" value="40"></label>
+    <label title="Mask display color (doesn't change the mask)">Color <input type="color" id="meColor"></label>
     <button id="meUndo" title="Undo (Ctrl+Z)">Undo</button>
     <button id="meInvert">Invert</button>
     <button id="meFill">Fill</button>
@@ -430,6 +477,7 @@ const LS_GEN = 'ainvil.generate';
 const DEFAULT_API = 'http://localhost:8188/';
 const MODES = ['txt2img', 'img2img', 'inpainting'];
 const UPLOAD_SUBFOLDER = 'ainvil';
+const DEFAULT_MASK_COLOR = '#ff285a';
 
 // Functional parameters: things on the Generate tab that a functional workflow maps onto its ComfyUI workflows.
 const FPARAMS = [
@@ -673,6 +721,7 @@ function defaultConfig() {
     connection: { apiUrl: DEFAULT_API },
     serverFeatures: { cads: false },
     serverPreferences: { saveImage: true },
+    clientPreferences: normalizeClientPrefs({}),
     functionalWorkflows: [{
       name: 'Anima',
       modelFilter: 'anima',
@@ -754,6 +803,15 @@ function normalizeCw(cw, where = 'custom workflow') {
   };
 }
 
+function normalizeClientPrefs(p) {
+  const cols = Number(p?.galleryColumns), rows = Number(p?.galleryRows);
+  return {
+    galleryColumns: [2, 3, 4].includes(cols) ? cols : 3,
+    galleryRows: [1, 2].includes(rows) ? rows : 2,
+    maskColor: /^#[0-9a-f]{6}$/i.test(p?.maskColor || '') ? p.maskColor.toLowerCase() : DEFAULT_MASK_COLOR,
+  };
+}
+
 function normalizeConfig(c) {
   checkVersion(c, 'Configuration');
   return {
@@ -761,6 +819,7 @@ function normalizeConfig(c) {
     connection: { apiUrl: String(c.connection?.apiUrl || DEFAULT_API) },
     serverFeatures: { cads: !!c.serverFeatures?.cads },
     serverPreferences: { saveImage: c.serverPreferences?.saveImage !== false },
+    clientPreferences: normalizeClientPrefs(c.clientPreferences),
     functionalWorkflows: (c.functionalWorkflows || []).map((f, i) => normalizeFw(f, `functionalWorkflows[${i}]`)),
     customWorkflows: (c.customWorkflows || []).map((f, i) => normalizeCw(f, `customWorkflows[${i}]`)),
   };
@@ -1314,6 +1373,13 @@ function filterList(list, pattern) {
   return list.filter((x) => re.test(x));
 }
 
+// Plain-text search: every whitespace-separated word must appear in the name (case-insensitive).
+function searchList(list, query) {
+  const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (!list || !words.length) return list;
+  return list.filter((x) => { const s = x.toLowerCase(); return words.every((w) => s.includes(w)); });
+}
+
 /* ======================================================================
    Generate tab state
    ====================================================================== */
@@ -1376,12 +1442,13 @@ function currentMode() {
 }
 
 /* ---------- rendering ---------- */
-function fillSelect(sel, options, value, { emptyLabel } = {}) {
+// `known` is the full server list, for the "(not on server)" marker when `options` is a filtered subset.
+function fillSelect(sel, options, value, { emptyLabel, known = options } = {}) {
   const opts = [...(options || [])];
   if (value && !opts.includes(value)) opts.unshift(value);
   sel.replaceChildren(
-    ...(opts.length ? [] : [h('option', { value: '' }, emptyLabel || '(none)')]),
-    ...opts.map((o) => h('option', { value: o, title: o }, o + (options && !options.includes(o) ? ' (not on server)' : ''))),
+    ...opts.map((o) => h('option', { value: o, title: o }, o + (known && !known.includes(o) ? ' (not on server)' : ''))),
+    ...(!opts.length || (options && !options.length) ? [h('option', { value: '', disabled: opts.length > 0 }, emptyLabel || '(none)')] : []),
   );
   sel.value = value || opts[0] || '';
 }
@@ -1397,14 +1464,21 @@ function refreshFwSelect() {
 
 function refreshGenerateOptions() {
   const fw = currentFw();
-  const models = optionsFor(fw, 'model');
-  fillSelect($('#modelSelect'), models ? filterList(models, fw?.modelFilter) : null, gen.model);
-  gen.model = $('#modelSelect').value;
+  renderModelSelect();
   fillSelect($('#sampler'), optionsFor(fw, 'sampler_name'), gen.sampler);
   fillSelect($('#scheduler'), optionsFor(fw, 'scheduler'), gen.scheduler);
   renderCustomParams();
   renderLoras();
   $('#cadsStatus').textContent = config.serverFeatures.cads ? 'The server supports CADS (enabled in Server Features).' : 'Enable CADS in Configuration › Server Features when the server supports it.';
+}
+
+function renderModelSelect() {
+  const fw = currentFw();
+  const models = optionsFor(fw, 'model');
+  const q = $('#modelSearch').value;
+  fillSelect($('#modelSelect'), models && searchList(filterList(models, fw?.modelFilter), q), gen.model,
+    { known: models, emptyLabel: q ? '(no matches)' : undefined });
+  gen.model = $('#modelSelect').value;
 }
 
 function renderGen() {
@@ -1455,7 +1529,7 @@ function renderDenoise() {
   gen.denoiseStep = clampInt(gen.denoiseStep, 0, steps);
   const sl = $('#denoiseSlider');
   sl.max = steps;
-  sl.value = gen.denoiseStep;
+  sl.value = steps - gen.denoiseStep;  // reversed so that right = more denoise
   $('#denoiseStep').max = steps;
   $('#denoiseStep').value = gen.denoiseStep;
   if (document.activeElement !== $('#denoiseValue')) $('#denoiseValue').value = denoiseValue().toFixed(2);
@@ -1523,21 +1597,31 @@ function customOptions(fw, cp) {
   return null;
 }
 
+function loraChoices(fw) {
+  const all = optionsFor(fw, 'lora');
+  return { all, opts: all && searchList(filterList(all, fw?.loraFilter), $('#loraSearch').value) };
+}
+
 function renderLoras() {
   const fw = currentFw();
-  const all = optionsFor(fw, 'lora');
-  const opts = all ? filterList(all, fw?.loraFilter) : null;
+  const { all, opts } = loraChoices(fw);
   const hasTemplate = MODES.some((m) => (fw?.workflows?.[m]?.mappings?.lora || []).some((x) => x.node));
   const box = $('#loraList');
   if (!gen.loras.length) {
-    box.replaceChildren(h('div', { class: 'lora-empty' }, hasTemplate ? 'No LoRAs active.' : 'This workflow has no LoRA template node mapped, so LoRAs are ignored.'));
+    box.replaceChildren(h('div', { class: 'lora-empty' }, hasTemplate ? 'No LoRAs added.' : 'This workflow has no LoRA template node mapped, so LoRAs are ignored.'));
     return;
   }
   box.replaceChildren(...gen.loras.map((l, i) => {
     const sel = h('select', { onchange: (e) => { l.name = e.target.value; saveGenSoon(); } });
-    fillSelect(sel, opts, l.name, { emptyLabel: '(no LoRAs on server)' });
+    fillSelect(sel, opts, l.name, { known: all, emptyLabel: all?.length && $('#loraSearch').value ? '(no matches)' : '(no LoRAs on server)' });
     l.name = sel.value;
-    return h('div', { class: 'lora-row' },
+    const off = l.active === false;
+    return h('div', { class: 'lora-row' + (off ? ' off' : '') },
+      h('button', {
+        class: 'small toggle' + (off ? '' : ' on'),
+        title: off ? 'Inactive: kept in the list but not used. Click to activate.' : 'Active. Click to keep this LoRA in the list without using it.',
+        onclick: () => { l.active = off; renderLoras(); saveGenSoon(); },
+      }, off ? 'Off' : 'On'),
       sel,
       h('input', { type: 'number', step: 0.05, value: l.weight, title: 'Weight', oninput: (e) => { l.weight = Number(e.target.value); saveGenSoon(); } }),
       h('button', { class: 'small danger', title: 'Remove', onclick: () => { gen.loras.splice(i, 1); renderLoras(); saveGenSoon(); } }, '✕'));
@@ -1564,13 +1648,25 @@ function renderGallery() {
   })));
 }
 
+// The viewer loads the /view URL directly when the browser allows it, because ComfyUI sends a
+// Content-Disposition filename there and right-click "Save Image As" uses it. Blob URLs have no
+// name ("Untitled"), so they're the fallback, wrapped in a download link for "Save Link As".
 function openViewer(i) {
   gallery.sel = i;
-  $('#viewerImg').src = gallery.items[i].src;
+  const it = gallery.items[i];
+  const img = $('#viewerImg');
+  img.onerror = () => { img.onerror = null; if (it.src !== it.url) img.src = it.src; };
+  img.src = it.url;
+  Object.assign($('#viewerLink'), { href: it.src, download: it.filename });
   $('#viewer').hidden = false;
   renderGallery();
 }
-function closeViewer() { $('#viewer').hidden = true; $('#viewerImg').removeAttribute('src'); }
+function closeViewer() {
+  $('#viewer').hidden = true;
+  $('#viewerImg').onerror = null;
+  $('#viewerImg').removeAttribute('src');
+  $('#viewerLink').removeAttribute('href');
+}
 function stepViewer(d) {
   if (!gallery.items.length) return;
   openViewer((gallery.sel + d + gallery.items.length) % gallery.items.length);
@@ -1701,7 +1797,7 @@ function collectParams(mode, seed, image) {
     image,
     crop: !!gen.crop,
     noise_mask: !!gen.noiseMask,
-    loras: gen.loras.filter((l) => l.name),
+    loras: gen.loras.filter((l) => l.name && l.active !== false),
     custom: gen.custom[fw?.name] || {},
     saveImage: config.serverPreferences.saveImage,
   };
@@ -1813,6 +1909,7 @@ function clearGenerate() {
   try { localStorage.removeItem(LS_GEN); } catch {}
   clearInputImage();
   resetGallery();
+  $('#modelSearch').value = $('#loraSearch').value = '';
   setStatus('');
   renderGen();
   renderGallery();
@@ -1869,7 +1966,27 @@ function renderMaskBox() {
   }
 }
 
-const MASK_RGB = [255, 40, 90];
+function maskRgb() {
+  const c = config.clientPreferences.maskColor;
+  return [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+}
+// Only the alpha channel is the mask; RGB is just the display color.
+function recolorMask(c) {
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const d = ctx.getImageData(0, 0, c.width, c.height);
+  const [r, g, b] = maskRgb();
+  for (let i = 0; i < d.data.length; i += 4) { d.data[i] = r; d.data[i + 1] = g; d.data[i + 2] = b; }
+  ctx.putImageData(d, 0, 0);
+}
+function setMaskColor(hex, { save = true } = {}) {
+  config.clientPreferences.maskColor = hex;
+  if (save) saveConfig();
+  $('#meColor').value = $('#cfgMaskColor').value = hex;
+  recolorMask(input.mask);
+  if (me.work && me.work !== input.mask) recolorMask(me.work);
+  renderMaskBox();
+}
 function maskHasContent(c) {
   const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
   for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
@@ -1884,11 +2001,11 @@ async function loadMaskFile(blob) {
   const ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0, input.w, input.h);
   const d = ctx.getImageData(0, 0, input.w, input.h);
-  const p = d.data;
+  const p = d.data, rgb = maskRgb();
   for (let i = 0; i < p.length; i += 4) {
     const lum = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
     const m = Math.round((lum * p[i + 3]) / 255);
-    p[i] = MASK_RGB[0]; p[i + 1] = MASK_RGB[1]; p[i + 2] = MASK_RGB[2]; p[i + 3] = m;
+    [p[i], p[i + 1], p[i + 2]] = rgb; p[i + 3] = m;
   }
   ctx.putImageData(d, 0, 0);
   input.mask = maskHasContent(c) ? c : null;
@@ -1944,7 +2061,7 @@ function mePos(e) {
 function meStroke(a, b) {
   const ctx = me.ctx;
   ctx.globalCompositeOperation = me.erase ? 'destination-out' : 'source-over';
-  ctx.strokeStyle = ctx.fillStyle = `rgb(${MASK_RGB.join(',')})`;
+  ctx.strokeStyle = ctx.fillStyle = `rgb(${maskRgb().join(',')})`;
   ctx.lineCap = ctx.lineJoin = 'round';
   ctx.lineWidth = Number($('#meSize').value) * b.k;
   ctx.beginPath();
@@ -1982,9 +2099,9 @@ function meSetErase(erase) {
 }
 function meInvert() {
   mePushUndo();
-  const d = me.ctx.getImageData(0, 0, me.work.width, me.work.height);
+  const d = me.ctx.getImageData(0, 0, me.work.width, me.work.height), rgb = maskRgb();
   for (let i = 0; i < d.data.length; i += 4) {
-    d.data[i] = MASK_RGB[0]; d.data[i + 1] = MASK_RGB[1]; d.data[i + 2] = MASK_RGB[2];
+    [d.data[i], d.data[i + 1], d.data[i + 2]] = rgb;
     d.data[i + 3] = 255 - d.data[i + 3];
   }
   me.ctx.putImageData(d, 0, 0);
@@ -1993,9 +2110,14 @@ function meFill(clear) {
   mePushUndo();
   me.ctx.globalCompositeOperation = 'source-over';
   me.ctx.clearRect(0, 0, me.work.width, me.work.height);
-  if (!clear) { me.ctx.fillStyle = `rgb(${MASK_RGB.join(',')})`; me.ctx.fillRect(0, 0, me.work.width, me.work.height); }
+  if (!clear) { me.ctx.fillStyle = `rgb(${maskRgb().join(',')})`; me.ctx.fillRect(0, 0, me.work.width, me.work.height); }
 }
-function meUndo() { const d = me.undo.pop(); if (d) me.ctx.putImageData(d, 0, 0); }
+function meUndo() {
+  const d = me.undo.pop();
+  if (!d) return;
+  me.ctx.putImageData(d, 0, 0);
+  recolorMask(me.work);  // the snapshot may predate a color change
+}
 function closeMaskEditor(apply) {
   if (apply) {
     input.mask = maskHasContent(me.work) ? me.work : null;
@@ -2238,7 +2360,17 @@ function renderConfig() {
   $('#apiUrl').value = config.connection.apiUrl;
   $('#cfgCads').checked = config.serverFeatures.cads;
   $('#cfgSaveImage').checked = config.serverPreferences.saveImage;
+  $('#cfgGalleryCols').value = config.clientPreferences.galleryColumns;
+  $('#cfgGalleryRows').value = config.clientPreferences.galleryRows;
+  setMaskColor(config.clientPreferences.maskColor, { save: false });
+  applyClientPrefs();
   renderConfigLists();
+}
+
+function applyClientPrefs() {
+  const t = $('#galleryThumbs').style;
+  t.setProperty('--cols', config.clientPreferences.galleryColumns);
+  t.setProperty('--rows', config.clientPreferences.galleryRows);
 }
 
 function uniqueName(name, list) {
@@ -2375,6 +2507,8 @@ function bindGenerate() {
     saveGenSoon();
   });
   $('#modelSelect').addEventListener('change', (e) => { gen.model = e.target.value; saveGenSoon(); });
+  $('#modelSearch').addEventListener('input', renderModelSelect);
+  $('#loraSearch').addEventListener('input', renderLoras);
   $('#prompt').addEventListener('input', (e) => { gen.prompt = e.target.value; saveGenSoon(); });
   $('#negative').addEventListener('input', (e) => { gen.negative = e.target.value; saveGenSoon(); });
   num('batchCount', 'batchCount');
@@ -2408,7 +2542,7 @@ function bindGenerate() {
   }));
 
   const setStep = (v) => { gen.denoiseStep = clampInt(v, 0, clampInt(gen.steps, 1, 10000)); renderDenoise(); saveGenSoon(); };
-  $('#denoiseSlider').addEventListener('input', (e) => setStep(e.target.value));
+  $('#denoiseSlider').addEventListener('input', (e) => setStep(clampInt(gen.steps, 1, 10000) - Number(e.target.value)));
   $('#denoiseStep').addEventListener('input', (e) => { if (e.target.value !== '') setStep(e.target.value); });
   $('#denoiseValue').addEventListener('input', (e) => {
     const v = Number(e.target.value);
@@ -2426,9 +2560,8 @@ function bindGenerate() {
   $('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runGenerate(); } });
 
   $('#btnAddLora').addEventListener('click', () => {
-    const fw = currentFw();
-    const opts = filterList(optionsFor(fw, 'lora') || [], fw?.loraFilter);
-    gen.loras.push({ name: opts[0] || '', weight: 1 });
+    const { opts } = loraChoices(currentFw());
+    gen.loras.push({ name: opts?.[0] || '', weight: 1, active: true });
     renderLoras();
     saveGenSoon();
   });
@@ -2451,6 +2584,8 @@ function bindGenerate() {
     catch (e) { toast('Could not load the image: ' + errText(e) + '\nIf ComfyUI is on another origin, start it with --enable-cors-header.', 'error'); }
   });
   $('#viewerClose').addEventListener('click', closeViewer);
+  $('#viewerDl').addEventListener('click', downloadSelected);
+  $('#viewerLink').addEventListener('click', (e) => e.preventDefault());
   $('#viewerPrev').addEventListener('click', () => stepViewer(-1));
   $('#viewerNext').addEventListener('click', () => stepViewer(1));
   $('#viewer').addEventListener('click', (e) => { if (e.target.id === 'viewer') closeViewer(); });
@@ -2483,6 +2618,8 @@ function bindGenerate() {
   $('#meClear').addEventListener('click', () => meFill(true));
   $('#meCancel').addEventListener('click', () => closeMaskEditor(false));
   $('#meDone').addEventListener('click', () => closeMaskEditor(true));
+  $('#meColor').addEventListener('input', (e) => setMaskColor(e.target.value, { save: false }));
+  $('#meColor').addEventListener('change', (e) => setMaskColor(e.target.value));
 
   document.addEventListener('keydown', (e) => {
     if (!$('#maskEditor').hidden) {
@@ -2536,6 +2673,12 @@ function bindConfig() {
 
   $('#cfgCads').addEventListener('change', (e) => { config.serverFeatures.cads = e.target.checked; configChanged(); });
   $('#cfgSaveImage').addEventListener('change', (e) => { config.serverPreferences.saveImage = e.target.checked; configChanged({ generate: false }); });
+  for (const [id, key] of [['#cfgGalleryCols', 'galleryColumns'], ['#cfgGalleryRows', 'galleryRows']]) {
+    $(id).addEventListener('change', (e) => { config.clientPreferences[key] = Number(e.target.value); saveConfig(); applyClientPrefs(); });
+  }
+  $('#cfgMaskColor').addEventListener('input', (e) => setMaskColor(e.target.value, { save: false }));
+  $('#cfgMaskColor').addEventListener('change', (e) => setMaskColor(e.target.value));
+  $('#btnMaskColorReset').addEventListener('click', () => setMaskColor(DEFAULT_MASK_COLOR));
 
   $('#btnImportFw').addEventListener('click', () => importItem('functionalWorkflow'));
   $('#btnImportCw').addEventListener('click', () => importItem('customWorkflow'));
