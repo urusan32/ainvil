@@ -101,6 +101,9 @@ body.layout-dragging, body.layout-dragging * { cursor: grabbing !important; user
 .status.error { color: var(--err); } .status.ok { color: var(--ok); }
 .progress { height: 4px; background: var(--line2); border-radius: 2px; overflow: hidden; margin-top: 6px; }
 .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.progress-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.progress-row .progress { flex: 1; margin-top: 0; }
+.progress-row button[hidden] { display: none; }
 
 /* Wraps when narrow; buttons draw the right/bottom dividers so wrapped rows stay boxed. */
 .seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-width: 1px 0 0 1px; border-radius: 6px; overflow: hidden; }
@@ -215,6 +218,10 @@ input[type=search] { background: var(--input); border: 1px solid var(--line); bo
 .hist-thumbs img:only-child, .hist-thumbs .placeholder { grid-column: 1 / -1; }
 .hist-meta { font-size: 12px; color: var(--muted); word-break: break-word; }
 .hist-meta b { color: var(--fg); }
+.job-row { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: var(--bg2); }
+.job-row.running { border-color: var(--accent); }
+.job-row .hist-meta { flex: 1; min-width: 0; }
+.job-text { margin-top: 4px; color: var(--fg); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hist-meta .ok { color: var(--ok); } .hist-meta .err, .hist-row .err { color: var(--err); }
 .hist-row .err { font-size: 12px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
 .hist-prompt { font-size: 13px; margin: 4px 0; white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -310,12 +317,16 @@ table.map td:first-child .hint { display: block; }
       <div class="actions">
         <button id="btnGenerate" class="primary big">Generate</button>
         <label class="inline">Batch count <input id="batchCount" type="number" min="1" max="128" step="1"></label>
-        <button id="btnCancel" class="danger" hidden>Cancel</button>
+        <button id="btnSkip" hidden title="Skip the image being generated; the rest of the job goes on">Skip</button>
+        <button id="btnCancel" class="danger" hidden title="Cancel the running job (all its images)">Cancel</button>
         <button id="btnClear">Clear</button>
         <button id="btnWorkflow" title="Download the ComfyUI API workflow instead of running it">Generate Workflow</button>
       </div>
       <div class="modeline">Mode <span id="modeBadge" class="badge">txt2img</span><span id="queueInfo"></span></div>
-      <div class="progress"><div id="progressBar"></div></div>
+      <div class="progress-row">
+        <div class="progress"><div id="progressBar"></div></div>
+        <button id="btnJobs" class="small" title="Show the queued Generate jobs">Manage Jobs</button>
+      </div>
       <div id="genStatus" class="status"></div>
     </section>
 
@@ -558,6 +569,22 @@ table.map td:first-child .hint { display: block; }
           <span class="hint">While generating, show the server's preview in the main gallery image instead of the first finished image. Needs the Live preview server feature.</span>
         </div>
         <div class="row">
+          <label class="chk"><input type="checkbox" id="cfgMultipleJobs"> Allow multiple jobs</label>
+          <span class="hint">Pressing Generate while a job is running queues another one (Manage Jobs lists them). When off, Generate waits for the running job.</span>
+        </div>
+        <div class="row">
+          <label>Clear the Output Gallery <select id="cfgGalleryClear">
+            <option value="generate">When Generate is pressed and no job is running</option>
+            <option value="jobStart">When each job starts</option>
+            <option value="never">Never (only with Clear)</option>
+          </select></label>
+          <label>Add the images to the Image Stash on clear <select id="cfgAutoStash">
+            <option value="no">No</option>
+            <option value="auto">Only on automatic clears</option>
+            <option value="all">On all clears</option>
+          </select></label>
+        </div>
+        <div class="row">
           <button id="btnCfgEditLayout" class="small">Edit Generate layout</button>
           <span class="hint">Move or hide the Generate tab's sections. Also available from the Edit layout button in the header.</span>
         </div>
@@ -619,6 +646,21 @@ table.map td:first-child .hint { display: block; }
     <div class="dropbox wide" id="stashDrop"><span class="ph">Drop images here, or click to choose, to add them to the stash</span></div>
     <input type="file" id="fileStash" accept="image/*" multiple hidden>
     <div class="hist-list" id="stashList"></div>
+  </div>
+</div>
+
+<!-- Generate jobs -->
+<div id="jobsDlg" class="overlay" hidden>
+  <div class="dialog">
+    <div class="dialog-head">
+      <h2>Jobs</h2>
+      <span class="hint" id="jobsInfo"></span>
+      <span class="spacer"></span>
+      <button id="jobsCancelAll" class="danger">Cancel All Jobs</button>
+      <button id="jobsClose" title="Close (Esc)">×</button>
+    </div>
+    <div class="hint">Generate jobs run one after another, each with its batch count of images. The settings are taken when Generate is pressed.</div>
+    <div class="hist-list" id="jobsList"></div>
   </div>
 </div>
 
@@ -1096,6 +1138,9 @@ function normalizeClientPrefs(p) {
     galleryRows: [1, 2].includes(rows) ? rows : 2,
     maskColor: /^#[0-9a-f]{6}$/i.test(p?.maskColor || '') ? p.maskColor.toLowerCase() : DEFAULT_MASK_COLOR,
     showLivePreview: p?.showLivePreview !== false,
+    multipleJobs: p?.multipleJobs !== false,
+    galleryClear: ['generate', 'jobStart', 'never'].includes(p?.galleryClear) ? p.galleryClear : 'generate',
+    autoStash: ['no', 'auto', 'all'].includes(p?.autoStash) ? p.autoStash : 'no',
     recentColors: (Array.isArray(p?.recentColors) ? p.recentColors : []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).map((c) => c.toLowerCase()).slice(0, RECENT_COLORS),
     // Generate layouts by column count (only the ones the user changed) and the hidden section ids.
     layouts: Object.fromEntries([1, 2, 3].map((n) => [n, normalizeLayout(p?.layouts?.[n], n)]).filter(([, l]) => l)),
@@ -1884,7 +1929,7 @@ let gen;
 const input = { blob: null, url: null, img: null, w: 0, h: 0, hash: null, name: '', mask: null, maskBounds: null, ctxBox: null };
 const gallery = { items: [], sel: 0, preview: null, previewPending: null, picked: false, render: () => renderGallery() };
 const uploadCache = new Map();
-let busy = false, cancelRequested = false, activeJobs = [];
+let busy = false;
 
 function currentFw() {
   const list = config.functionalWorkflows;
@@ -2276,6 +2321,16 @@ function resetGallery() {
   gallery.picked = false;
   clearLivePreview();
 }
+// Empties the Output Gallery. `auto`: a job-based clear rather than a Clear button. Client Preferences decide
+// whether the images go to the Image Stash first (their blobs outlive the revoked URLs).
+function clearGallery(auto) {
+  const st = config.clientPreferences.autoStash, items = gallery.items;
+  resetGallery();
+  renderGallery();
+  if (items.length && (st === 'all' || (st === 'auto' && auto))) {
+    stashItems(items).then((ok) => { if (ok) toast(`Added ${items.length} image(s) from the Output Gallery to the Image Stash`); });
+  }
+}
 async function itemBlob(it) { return it.blob || fetchBlob(it.url); }
 
 async function fetchBlob(url) {
@@ -2318,9 +2373,7 @@ function setStatus(msg, kind = '') {
 }
 function setBusy(b) {
   busy = b;
-  $('#btnGenerate').disabled = b;
-  $('#btnWorkflow').disabled = b;
-  $('#btnCancel').hidden = !b;
+  renderJobControls();
   if (!b) setProgress(0);
 }
 
@@ -2376,50 +2429,53 @@ function cropCanvas(src, b) {
 
 // Returns {image: uploaded path, src: its size, focus}. Focused inpainting uploads the context window's crop of the
 // image and mask; focus then holds the window and the uploaded original to paste the result into.
+// The input image, mask and window are read before the first await, so they can change during the uploads.
 async function ensureUploads(mode) {
-  const ref = await uploadCached(input.blob, input.hash);
+  const { blob: srcBlob, hash: srcHash } = input;
   const whole = { w: input.w, h: input.h };
+  const focused = mode === 'inpainting' && gen.inpaintMode === 'focused';
+  const b = focused ? ctxBox() : { x: 0, y: 0, ...whole };
+  const mask = mode === 'inpainting' ? cropCanvas(input.mask, b) : null;
+  if (focused && !maskBounds(mask)) throw new Error('The context window contains none of the mask. Move it over the masked area (mask editor › Window).');
+  const crop = focused ? cropCanvas(input.img, b) : null;
+  const ref = await uploadCached(srcBlob, srcHash);
   if (mode === 'img2img') return { image: refPath(ref), src: whole, focus: null };
-  if (gen.inpaintMode !== 'focused') return { image: refPath(await uploadMaskCached(ref, input.hash, input.mask)), src: whole, focus: null };
-  const b = ctxBox();
-  const mask = cropCanvas(input.mask, b);
-  if (!maskBounds(mask)) throw new Error('The context window contains none of the mask. Move it over the masked area (mask editor › Window).');
-  const blob = await canvasToBlob(cropCanvas(input.img, b));
+  if (!focused) return { image: refPath(await uploadMaskCached(ref, srcHash, mask)), src: whole, focus: null };
+  const blob = await canvasToBlob(crop);
   const hash = hash53(new Uint8Array(await blob.arrayBuffer()));
   const cref = await uploadMaskCached(await uploadCached(blob, hash), hash, mask);
   return { image: refPath(cref), src: { w: b.w, h: b.h }, focus: { ...b, original: refPath(ref) } };
 }
 
 /* ---------- generation ---------- */
-// `up` is ensureUploads()' result (null in txt2img).
-function collectParams(mode, seed, up) {
+// withUploads() adds the seed and ensureUploads()' result (null in txt2img) to collectParams()' copy of the form.
+function withUploads(p, seed, up) {
+  // Focused inpainting pastes back the whole resized window, so it must not be cropped.
+  return { ...p, seed, image: up?.image, src: up?.src, focus: up?.focus || null, crop: p.crop && !up?.focus };
+}
+function collectParams(mode) {
   const fw = currentFw();
   const sp = config.serverPreferences;
-  return {
+  return structuredClone({
     model: gen.model,
     prompt: gen.prompt,
     negative: gen.negative,
     width: clampInt(gen.width, 16, 16384, 1024),
     height: clampInt(gen.height, 16, 16384, 1024),
     batch_size: clampInt(gen.batchSize, 1, 4096, 1),
-    seed,
     steps: clampInt(gen.steps, 1, 10000, 30),
     cfg: Number(gen.cfg) || 0,
     sampler_name: gen.sampler,
     scheduler: gen.scheduler,
     denoise: mode === 'txt2img' ? 1 : denoiseValue(),
-    image: up?.image,
-    src: up?.src,
-    focus: up?.focus || null,
-    // Focused inpainting pastes back the whole resized window, so it must not be cropped.
-    crop: !!gen.crop && !up?.focus,
+    crop: !!gen.crop,
     noise_mask: !!gen.noiseMask,
     scale: { method: sp.scaleMethod, model: sp.upscaleModel },
     loras: gen.loras.filter((l) => l.name && l.active !== false),
     custom: gen.custom[fw?.name] || {},
     cads: cadsActive(fw, mode) ? gen.cads : null,
     saveImage: config.serverPreferences.saveImage,
-  };
+  });
 }
 
 function seedList(count) {
@@ -2428,99 +2484,227 @@ function seedList(count) {
   return Array.from({ length: count }, (_, i) => base + i);
 }
 
-async function prepare() {
+// Reads the whole form before the first await (the job's settings are those of the moment Generate was pressed).
+async function prepare(count = 1) {
   const fw = currentFw();
   if (!fw) throw new Error('No functional workflow is configured. Add one in the Configuration tab.');
   const mode = currentMode();
   if (!fw.workflows?.[mode]?.workflow) throw new Error(`"${fw.name}" has no ${mode} workflow configured.`);
+  const params = collectParams(mode), seeds = seedList(count);
+  const outIds = (fw.workflows[mode].mappings?.output || []).map((x) => x.node);
+  const uploads = mode === 'txt2img' ? null : ensureUploads(mode);
+  uploads?.catch(() => {});
   await ensureObjectInfo();
-  const up = mode === 'txt2img' ? null : await ensureUploads(mode);
-  return { fw, mode, up };
+  const up = await uploads;
+  return { fw, mode, outIds, seeds, params: (seed) => withUploads(params, seed, up) };
 }
 
-async function waitForPrompt(id, cancelled = () => cancelRequested) {
+// Returns the prompt's outputs, or null when skipped() and it was interrupted or is gone from the queue.
+async function waitForPrompt(id, cancelled, skipped = () => false) {
   for (;;) {
     if (cancelled()) throw new Error('Cancelled');
     const hist = await api.history(id);
     const entry = hist?.[id];
     if (entry) {
       const st = entry.status || {};
+      // An interrupted prompt also has status_str 'error'.
+      if ((st.messages || []).some((m) => m[0] === 'execution_interrupted')) {
+        if (skipped()) return null;
+        throw new Error('Interrupted');
+      }
       if (st.status_str === 'error') {
         const err = (st.messages || []).find((m) => m[0] === 'execution_error')?.[1];
         throw new Error(err ? `ComfyUI error in node #${err.node_id} (${err.node_type}): ${err.exception_message}` : 'ComfyUI reported an execution error.');
       }
-      if ((st.messages || []).some((m) => m[0] === 'execution_interrupted')) throw new Error('Interrupted');
       if (st.completed !== false) return entry.outputs || {};
-    }
+    } else if (skipped()) return null;
     await sleep(700);
   }
 }
 
-async function runGenerate() {
-  if (busy) return;
+/* ---------- Generate jobs ---------- */
+// Each Generate press is a job: its batch count of prompts, built from the form at that moment. Jobs run one at a
+// time, in order (jobs[0] is runningJob); a job queues its prompts on the server when it starts.
+// job: {n, state: 'preparing' | 'queued' | 'running', ready, error, cancelled, info, prompts: [{seed, prompt, id, meta, done, skipped}],
+//       cur (the prompt being waited for), done, skipped, images}
+const jobs = [];
+let jobSeq = 0, runningJob = null;
+
+function multiJobs() { return config.clientPreferences.multipleJobs; }
+
+function runGenerate() {
+  if (busy && !multiJobs()) return;
   if (exBusy) return setStatus('An Extras run is in progress; wait for it or cancel it first.', 'error');
-  cancelRequested = false;
+  if (!busy && config.clientPreferences.galleryClear === 'generate') clearGallery(true);
+  const count = clampInt(gen.batchCount, 1, 128, 1);
+  const job = {
+    n: ++jobSeq, state: 'preparing', prompts: [], done: 0, skipped: 0, images: 0,
+    info: { fw: gen.fwName, mode: currentMode(), model: gen.model, text: gen.prompt, count, width: gen.width, height: gen.height, batchSize: gen.batchSize, steps: gen.steps },
+  };
+  // prepare() reads the form synchronously, so later edits don't change this job.
+  job.ready = prepare(count).then((r) => {
+    Object.assign(job, { mode: r.mode, outIds: r.outIds, state: 'queued' });
+    job.prompts = r.seeds.map((seed) => ({ seed, prompt: buildPrompt(r.fw, r.mode, r.params(seed)) }));
+    job.info.seeds = r.seeds;
+  }).catch((e) => { job.error = e; }).finally(renderJobs);
+  jobs.push(job);
   setBusy(true);
-  resetGallery();
+  if (jobs.length > 1) setStatus(`Job #${job.n} queued (${jobs.length - 1} ahead of it).`);
+  runJobs();
+}
+
+async function runJobs() {
+  if (runningJob) return;
+  gallery.picked = false;
   renderGallery();
+  while (jobs.length) {
+    const job = runningJob = jobs[0];
+    await job.ready;
+    if (!job.cancelled) await runJob(job);
+    else setStatus(multiJobs() ? `Job #${job.n}: Cancelled.` : 'Cancelled.');
+    jobs.shift();
+    runningJob = null;
+    renderJobs();
+  }
+  clearLivePreview();
+  if (!gallery.picked) gallery.sel = 0;
+  setBusy(false);
+  renderGallery();
+}
+
+async function runJob(job) {
+  const tag = multiJobs() ? `Job #${job.n}: ` : '';
+  const n = job.prompts.length;
   try {
-    setStatus('Preparing…');
-    const { fw, mode, up } = await prepare();
-    const count = clampInt(gen.batchCount, 1, 128, 1);
-    const seeds = seedList(count);
-    activeJobs = [];
+    if (job.error) throw job.error;
+    job.state = 'running';
+    renderJobs();
+    if (config.clientPreferences.galleryClear === 'jobStart') clearGallery(true);
     progress.promptIds.clear();
-    for (let i = 0; i < count; i++) {
-      if (cancelRequested) break;
-      const prompt = buildPrompt(fw, mode, collectParams(mode, seeds[i], up));
-      const r = await api.queuePrompt(prompt);
-      activeJobs.push({ id: r.prompt_id, seed: seeds[i], meta: promptMeta(prompt, r.number) });
+    progress.running = null;
+    for (const [i, p] of job.prompts.entries()) {
+      if (job.cancelled) break;
+      const r = await api.queuePrompt(p.prompt);
+      Object.assign(p, { id: r.prompt_id, meta: promptMeta(p.prompt, r.number) });
       progress.promptIds.add(r.prompt_id);
-      setStatus(`Queued ${i + 1} / ${count}`);
+      setStatus(`${tag}Queued ${i + 1} / ${n}`);
     }
-    for (const [k, job] of activeJobs.entries()) {
-      if (cancelRequested) break;
-      setStatus(`Generating ${k + 1} / ${activeJobs.length} (seed ${job.seed})…`);
+    // A prompt queued while Cancel was running isn't in its list.
+    if (job.cancelled) await cancelJobs(job.prompts.filter((p) => p.id));
+    for (const [k, p] of job.prompts.entries()) {
+      if (job.cancelled) break;
+      job.cur = p;
+      renderJobs();
+      setStatus(`${tag}Generating ${k + 1} / ${n} (seed ${p.seed})…`);
       setProgress(0);
-      const outputs = await waitForPrompt(job.id);
-      job.done = true;
+      const outputs = await waitForPrompt(p.id, () => job.cancelled, () => p.skipped);
+      p.done = true;
+      job.cur = null;
+      job.done++;
       clearLivePreview();
-      const slotMap = fw.workflows[mode].mappings || {};
-      const ids = (slotMap.output || []).map((x) => x.node).filter((id) => outputs[id]);
+      if (!outputs) { job.skipped++; renderJobs(); renderGallery(); continue; }
+      const ids = job.outIds.filter((id) => outputs[id]);
       const imgs = (ids.length ? ids : Object.keys(outputs)).flatMap((id) => outputs[id]?.images || []);
-      for (const [bi, im] of imgs.entries()) gallery.items.push({ ...(await galleryItem(im, job.seed, bi)), ...job.meta });
+      for (const [bi, im] of imgs.entries()) gallery.items.push({ ...(await galleryItem(im, p.seed, bi)), ...p.meta });
+      job.images += imgs.length;
+      renderJobs();
       renderGallery();
     }
-    setStatus(cancelRequested ? 'Cancelled.' : `Done — ${gallery.items.length} image(s), ${mode}.`, cancelRequested ? '' : 'ok');
+    if (job.cancelled) throw new Error('Cancelled');
+    setStatus(`${tag}Done — ${job.images} image(s), ${job.mode}${job.skipped ? ` (${job.skipped} skipped)` : ''}.`, 'ok');
   } catch (e) {
     console.error(e);
-    setStatus(errText(e) === 'Cancelled' ? 'Cancelled.' : errText(e), errText(e) === 'Cancelled' ? '' : 'error');
+    const cancelled = errText(e) === 'Cancelled';
+    setStatus(tag + (cancelled ? 'Cancelled.' : errText(e)), cancelled ? '' : 'error');
+    // The next job's status replaces this one, so errors also get a toast.
+    if (!cancelled && jobs.length > 1) toast(tag + errText(e), 'error');
   } finally {
+    job.cur = null;
     clearLivePreview();
-    if (!gallery.picked) gallery.sel = 0;
-    setBusy(false);
-    renderGallery();
   }
 }
 
-async function cancelGenerate() {
-  cancelRequested = true;
-  await cancelJobs(activeJobs);
+// Skips the prompt the running job is waiting for: removes it from the server queue, or interrupts it if it's running.
+async function skipGenerate() {
+  const p = runningJob?.cur;
+  if (!p || p.skipped) return;
+  p.skipped = true;
+  renderJobControls();
+  try {
+    await api.deleteQueued([p.id]);
+    await api.interrupt(p.id);
+  } catch (e) { toast('Skip: ' + errText(e), 'error'); }
+}
+
+function cancelGenerate() { if (runningJob) cancelJob(runningJob); }
+async function cancelJob(job) {
+  if (job.cancelled) return;
+  job.cancelled = true;
+  // Only the running job has prompts on the server; the others are just dropped.
+  if (job !== runningJob) {
+    const i = jobs.indexOf(job);
+    if (i >= 0) jobs.splice(i, 1);
+  }
+  renderJobs();
+  if (job === runningJob) await cancelJobs(job.prompts.filter((p) => p.id));
+}
+function cancelAllJobs() {
+  for (const job of [...jobs].reverse()) cancelJob(job);
 }
 async function cancelJobs(jobs) {
   const pending = jobs.filter((j) => !j.done).map((j) => j.id);
+  const running = progress.running || pending[0];
   try {
     if (pending.length) await api.deleteQueued(pending);
-    await api.interrupt(progress.running || pending[0]);
+    // Without a prompt id the server interrupts whatever is running, maybe another client's prompt.
+    if (running) await api.interrupt(running);
   } catch (e) { toast('Cancel: ' + errText(e), 'error'); }
 }
 
+function renderJobControls() {
+  const multi = multiJobs();
+  $('#btnGenerate').disabled = busy && !multi;
+  $('#btnCancel').hidden = !busy;
+  $('#btnSkip').hidden = !busy;
+  $('#btnSkip').disabled = !runningJob?.cur || runningJob.cur.skipped || runningJob.cancelled;
+  $('#btnJobs').hidden = !multi;
+  $('#btnJobs').textContent = jobs.length ? `Manage Jobs (${jobs.length})` : 'Manage Jobs';
+  if (!multi && !$('#jobsDlg').hidden) closeJobs();
+}
+
+function openJobs() {
+  $('#jobsDlg').hidden = false;
+  renderJobs();
+}
+function closeJobs() { $('#jobsDlg').hidden = true; }
+function renderJobs() {
+  renderJobControls();
+  if ($('#jobsDlg').hidden) return;
+  $('#jobsInfo').textContent = jobs.length ? `${jobs.length} job${jobs.length > 1 ? 's' : ''}` : '';
+  $('#jobsCancelAll').disabled = !jobs.some((j) => !j.cancelled);
+  $('#jobsList').replaceChildren(...(jobs.length ? jobs.map(jobRow) : [h('div', { class: 'placeholder' }, 'No jobs are queued or running.')]));
+}
+function jobRow(job) {
+  const i = job.info, seeds = i.seeds || [];
+  const state = job.cancelled ? 'Cancelling…'
+    : job.error ? 'Failed'
+    : job.state === 'running' ? `Running · ${job.done} / ${i.count} done${job.skipped ? ` (${job.skipped} skipped)` : ''}`
+    : job.state === 'preparing' ? 'Preparing…' : 'Queued';
+  const seedText = !seeds.length ? '' : seeds.length === 1 ? `seed ${seeds[0]}` : `seeds ${seeds[0]}, ${seeds[1]}${seeds.length > 2 ? ', …' : ''}`;
+  return h('div', { class: 'job-row' + (job === runningJob && job.state === 'running' ? ' running' : '') },
+    h('div', { class: 'hist-meta' },
+      h('div', {}, h('b', {}, `#${job.n}`), ` · ${state}`),
+      h('div', {}, [i.mode, i.fw, i.model, `${i.count} image${i.count > 1 ? 's' : ''}${i.batchSize > 1 ? ` × batch ${i.batchSize}` : ''}`,
+        `${i.width}×${i.height}`, `${i.steps} steps`, seedText].filter(Boolean).join(' · ')),
+      i.text ? h('div', { class: 'job-text', title: i.text }, i.text) : null),
+    h('button', { class: 'small danger', disabled: job.cancelled, title: 'Cancel this job (all its images)', onclick: () => cancelJob(job) }, 'Cancel'));
+}
+
 async function generateWorkflowFile() {
-  if (busy) return;
   try {
     setStatus('Building workflow…');
-    const { fw, mode, up } = await prepare();
-    const prompt = buildPrompt(fw, mode, collectParams(mode, seedList(1)[0], up));
+    const { fw, mode, seeds, params } = await prepare();
+    const prompt = buildPrompt(fw, mode, params(seeds[0]));
     downloadJSON(prompt, `ainvil-${slug(fw.name)}-${mode}-api.json`);
     setStatus(`Downloaded the ${mode} workflow (ComfyUI API format).`, 'ok');
   } catch (e) {
@@ -2529,12 +2713,11 @@ async function generateWorkflowFile() {
 }
 
 function clearGenerate() {
-  if (busy) return toast('Cancel the running generation first.');
   const fw = currentFw();
   gen = genDefaults(fw);
   try { localStorage.removeItem(LS_GEN); } catch {}
   clearInputImage();
-  resetGallery();
+  clearGallery(false);
   $('#modelSearch').value = $('#loraSearch').value = '';
   setStatus('');
   renderGen();
@@ -2864,7 +3047,6 @@ async function loadPromptImage(ref, mode, focus) {
 }
 
 async function loadSettingsFromPng(file) {
-  if (busy) return toast('Cancel the running generation first.');
   let a;
   try { a = JSON.parse((await readPngText(file)).prompt || 'null'); }
   catch (e) { return toast('Could not read the image metadata: ' + errText(e), 'error'); }
@@ -3053,7 +3235,6 @@ function historyRow(en) {
           onclick: () => downloadAll(g, `ainvil-history-${en.number}`) }, 'Download'),
         h('button', { class: 'small', disabled: !en.match, title: en.match ? 'Load this prompt\'s settings into the Generate form' : 'Doesn\'t match a configured functional workflow',
           onclick: () => {
-            if (busy) return toast('Cancel the running generation first.');
             closeHistory();
             applyPromptSettings(en.a, `history #${en.number}`);
           } }, 'Load Settings'),
@@ -3062,7 +3243,6 @@ function historyRow(en) {
 }
 
 async function historyToGallery(en) {
-  if (busy) return toast('Cancel the running generation first.');
   const first = gallery.items.length;
   const { a, text, model, number, time } = en;
   for (const [bi, im] of en.images.entries()) gallery.items.push({ ...(await galleryItem(im, en.seed, bi)), a, text, model, number, time });
@@ -3231,7 +3411,6 @@ function stashRow(it, i) {
         h('button', { class: 'small', title: 'Add this image to the Output Gallery', onclick: () => stashToGallery(it) }, 'Add to Gallery'),
         h('button', { class: 'small', disabled: !match, title: match ? 'Load this image\'s settings into the Generate form' : 'Doesn\'t match a configured functional workflow',
           onclick: () => {
-            if (busy) return toast('Cancel the running generation first.');
             closeStash();
             applyPromptSettings(it.a, `stashed ${it.filename}`);
           } }, 'Load Settings'),
@@ -3240,7 +3419,6 @@ function stashRow(it, i) {
     ));
 }
 function stashToGallery(it) {
-  if (busy) return toast('Cancel the running generation first.');
   // The gallery revokes its own blob URLs, so it gets a separate one.
   const url = URL.createObjectURL(it.blob);
   gallery.items.push({ filename: it.filename, url, src: url, seed: it.seed, batchIndex: it.batchIndex, blob: it.blob });
@@ -4419,6 +4597,10 @@ function renderConfig() {
   $('#cfgCads').checked = config.serverFeatures.cads;
   $('#cfgLivePreview').checked = config.serverFeatures.livePreview;
   $('#cfgShowLivePreview').checked = config.clientPreferences.showLivePreview;
+  $('#cfgMultipleJobs').checked = config.clientPreferences.multipleJobs;
+  $('#cfgGalleryClear').value = config.clientPreferences.galleryClear;
+  $('#cfgAutoStash').value = config.clientPreferences.autoStash;
+  renderJobControls();
   $('#cfgSaveImage').checked = config.serverPreferences.saveImage;
   $('#cfgGalleryCols').value = config.clientPreferences.galleryColumns;
   $('#cfgGalleryRows').value = config.clientPreferences.galleryRows;
@@ -4663,6 +4845,11 @@ function bindGenerate() {
 
   $('#btnGenerate').addEventListener('click', runGenerate);
   $('#btnCancel').addEventListener('click', cancelGenerate);
+  $('#btnSkip').addEventListener('click', skipGenerate);
+  $('#btnJobs').addEventListener('click', openJobs);
+  $('#jobsCancelAll').addEventListener('click', cancelAllJobs);
+  $('#jobsClose').addEventListener('click', closeJobs);
+  $('#jobsDlg').addEventListener('click', (e) => { if (e.target.id === 'jobsDlg') closeJobs(); });
   $('#btnClear').addEventListener('click', clearGenerate);
   $('#btnWorkflow').addEventListener('click', generateWorkflowFile);
   $('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runGenerate(); } });
@@ -4678,11 +4865,7 @@ function bindGenerate() {
   $('#btnDlSel').addEventListener('click', () => downloadSelected());
   $('#btnDlAll').addEventListener('click', () => downloadAll());
   $('#btnStashAll').addEventListener('click', () => stashAll(gallery));
-  $('#btnClearGallery').addEventListener('click', () => {
-    if (busy) return toast('Cancel the running generation first.');
-    resetGallery();
-    renderGallery();
-  });
+  $('#btnClearGallery').addEventListener('click', () => clearGallery(false));
   $('#btnUseSeed').addEventListener('click', () => {
     const it = gallery.items[gallery.sel];
     if (!it) return;
@@ -4830,6 +5013,7 @@ function bindGenerate() {
       else if (e.key === 'ArrowRight') stepViewer(1);
       return;
     }
+    if (!$('#jobsDlg').hidden && e.key === 'Escape') return closeJobs();
     if (!$('#historyDlg').hidden && e.key === 'Escape') closeHistory();
     if (!$('#stashDlg').hidden && e.key === 'Escape') closeStash();
     else if (layoutEditing && e.key === 'Escape' && $('#historyDlg').hidden) { if (ldrag) endLayoutDrag(false); else setLayoutEditing(false); }
@@ -4901,6 +5085,9 @@ function bindConfig() {
   $('#cfgCads').addEventListener('change', (e) => { config.serverFeatures.cads = e.target.checked; configChanged(); });
   $('#cfgLivePreview').addEventListener('change', (e) => { config.serverFeatures.livePreview = e.target.checked; configChanged({ generate: false }); });
   $('#cfgShowLivePreview').addEventListener('change', (e) => { config.clientPreferences.showLivePreview = e.target.checked; saveConfig(); });
+  $('#cfgMultipleJobs').addEventListener('change', (e) => { config.clientPreferences.multipleJobs = e.target.checked; saveConfig(); renderJobControls(); });
+  $('#cfgGalleryClear').addEventListener('change', (e) => { config.clientPreferences.galleryClear = e.target.value; saveConfig(); });
+  $('#cfgAutoStash').addEventListener('change', (e) => { config.clientPreferences.autoStash = e.target.value; saveConfig(); });
   $('#cfgSaveImage').addEventListener('change', (e) => { config.serverPreferences.saveImage = e.target.checked; configChanged({ generate: false }); });
   $('#cfgScaleMethod').addEventListener('change', (e) => { config.serverPreferences.scaleMethod = e.target.value; saveConfig(); });
   $('#cfgUpscaleModel').addEventListener('change', (e) => { config.serverPreferences.upscaleModel = e.target.value; saveConfig(); });
