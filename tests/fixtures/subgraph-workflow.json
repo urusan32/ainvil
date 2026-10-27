@@ -1,0 +1,1 @@
+{"id": "subgraph-test", "nodes": [{"id": 1, "type": "a1b2c3d4-subgraph", "inputs": [], "outputs": [], "mode": 0, "widgets_values": []}], "links": [], "definitions": {"subgraphs": [{"id": "a1b2c3d4-subgraph", "name": "Packed", "nodes": [], "links": []}]}, "version": 0.4}

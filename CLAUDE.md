@@ -52,6 +52,10 @@ The spec is `DESIGN.md`. The user-facing docs are `README.md`.
 - Nothing tracked here at the moment.
 
 ## Testing
+The end-to-end suite is `tests/` (see `tests/README.md`): Gherkin features in `tests/features`, steps in `tests/steps`, and a stdlib runner/Marionette driver in `tests/ainvil_bdd`. Run `python3 tests/run.py` (`--tags '~@gpu'` skips generations, `--coverage` lists functions no scenario reaches). Add or update scenarios when behavior changes.
+- Each scenario starts from empty storage with the default config pointed at the test server. The page helpers (`window.__t`) capture downloads, toasts and confirms, and simulate file pickers, drops, paste and canvas strokes.
+- A guard in the page refuses prompts without `safe,` or saving outside `ainvil-test/`.
+
 Headless Firefox driven over Marionette (raw socket, Python stdlib) works well for end-to-end checks against the test server.
 - Start Firefox with `-remote-allow-system-access` if you need the chrome context (e.g. to inspect `gContextMenu`).
 - Top-level `let`/`const` (`gen`, `config`, `gallery`) aren't on `window`; read them with an indirect `(0, window.eval)(…)`.

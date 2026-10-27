@@ -12,3 +12,6 @@ __pycache__/
 ainvil-config*.json
 *-api.json
 *.zip
+
+# Test runs (Firefox profile, coverage copy, failure screenshots)
+tests/.out/
